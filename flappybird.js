@@ -121,7 +121,7 @@ window.onload = function () {
     birdImg.src = "./flappybird.png";
 
     // Load bird animation frames
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
         let frame = new Image();
         frame.src = `./flappybird${i}.png`;
         birdAnimFrames.push(frame);
@@ -222,7 +222,7 @@ function updateBirdAnimation(game) {
     if (game.animationTimer >= animationSpeed) {
         game.animationTimer = 0;
         if (!game.isFlapping) {
-            game.animationFrame = (game.animationFrame + 1) % 4;
+            game.animationFrame = (game.animationFrame + 1) % 3;
         }
     }
 }
@@ -232,7 +232,7 @@ function drawBird(game) {
 
     if (game.isFlapping) {
         // Use rapid flap animation when jumping
-        const flapFrame = Math.floor(game.flapAnimation / 5) % 4;
+        const flapFrame = Math.floor(game.flapAnimation / 5) % 3;
         currentFrame = birdAnimFrames[flapFrame];
     } else {
         // Use slower idle animation
