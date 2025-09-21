@@ -16,6 +16,12 @@ let birdAnimFrames = [];
 let animationSpeed = 8; // frames per animation frame
 let flapAnimationDuration = 20; // frames to show flap animation
 
+//sound effects
+let sfxWing;
+let sfxHit;
+let sfxDie;
+let sfxPoint;
+
 //pipes
 let pipeWidth = 64; //width/height ratio = 384/3072 = 1/8
 let pipeHeight = 512;
@@ -128,8 +134,10 @@ window.onload = function () {
     }
 
     birdImg.onload = function () {
-        game1.context.drawImage(birdImg, game1.bird.x, game1.bird.y, game1.bird.width, game1.bird.height);
-        game2.context.drawImage(birdImg, game2.bird.x, game2.bird.y, game2.bird.width, game2.bird.height);
+        // Use first animation frame for initial draw if available, otherwise use original
+        const initialFrame = birdAnimFrames[0] || birdImg;
+        game1.context.drawImage(initialFrame, game1.bird.x, game1.bird.y, game1.bird.width, game1.bird.height);
+        game2.context.drawImage(initialFrame, game2.bird.x, game2.bird.y, game2.bird.width, game2.bird.height);
     }
 
     topPipeImg = new Image();
@@ -137,6 +145,19 @@ window.onload = function () {
 
     bottomPipeImg = new Image();
     bottomPipeImg.src = "./bottompipe.png";
+
+    //load sound effects
+    sfxWing = new Audio();
+    sfxWing.src = "./sfx_wing.wav";
+
+    sfxHit = new Audio();
+    sfxHit.src = "./sfx_hit.wav";
+
+    sfxDie = new Audio();
+    sfxDie.src = "./sfx_die.wav";
+
+    sfxPoint = new Audio();
+    sfxPoint.src = "./sfx_point.wav";
 
     requestAnimationFrame(update);
 
@@ -208,40 +229,29 @@ function updateDifficulty(game) {
 }
 
 function updateBirdAnimation(game) {
-    // Handle flap animation when jumping
+    // Handle flap animation when jumping - cycle through once
     if (game.isFlapping) {
         game.flapAnimation++;
-        if (game.flapAnimation >= flapAnimationDuration) {
+        // Calculate which frame to show (0, 1, 2, then back to 0)
+        const frameIndex = Math.floor(game.flapAnimation / 7) % 3; // 7 frames per animation frame for smoother transition
+        game.animationFrame = frameIndex;
+
+        // End animation after one complete cycle (3 frames * 7 = 21 frames)
+        if (game.flapAnimation >= 21) {
             game.isFlapping = false;
             game.flapAnimation = 0;
-        }
-    }
-
-    // Update idle animation timer
-    game.animationTimer++;
-    if (game.animationTimer >= animationSpeed) {
-        game.animationTimer = 0;
-        if (!game.isFlapping) {
-            game.animationFrame = (game.animationFrame + 1) % 3;
+            game.animationFrame = 0; // Reset to first frame when not flapping
         }
     }
 }
 
 function drawBird(game) {
-    let currentFrame;
-
-    if (game.isFlapping) {
-        // Use rapid flap animation when jumping
-        const flapFrame = Math.floor(game.flapAnimation / 5) % 3;
-        currentFrame = birdAnimFrames[flapFrame];
-    } else {
-        // Use slower idle animation
-        currentFrame = birdAnimFrames[game.animationFrame];
-    }
+    // Always use the current animation frame (0 when idle, cycles 0->1->2->0 when flapping)
+    let currentFrame = birdAnimFrames[game.animationFrame];
 
     // Use fallback if animation frames aren't loaded yet
     if (!currentFrame || !currentFrame.complete) {
-        currentFrame = birdImg;
+        currentFrame = birdAnimFrames[0] || birdImg;
     }
 
     game.context.drawImage(currentFrame, game.bird.x, game.bird.y, game.bird.width, game.bird.height);
@@ -277,11 +287,12 @@ function updateGame(game) {
             }
         }
 
-        //draw bird with slight rot
+        //draw bird with slight rot using first animation frame
         game.context.save();
         game.context.translate(game.bird.x + game.bird.width / 2, game.bird.y + game.bird.height / 2);
         game.context.rotate(Math.PI / 4); //45 deg rotation
-        game.context.drawImage(birdImg, -game.bird.width / 2, -game.bird.height / 2, game.bird.width, game.bird.height);
+        const deathFrame = birdAnimFrames[0] && birdAnimFrames[0].complete ? birdAnimFrames[0] : birdImg;
+        game.context.drawImage(deathFrame, -game.bird.width / 2, -game.bird.height / 2, game.bird.width, game.bird.height);
         game.context.restore();
     } else if (!game.gameOver) {
         //bird - normal gameplay
@@ -295,6 +306,7 @@ function updateGame(game) {
         //check for death
         if (game.bird.y > game.board.height - 90 || game.bird.y <= 0) {
             game.gameOver = true;
+            playSound(sfxDie);
         }
     }
 
@@ -310,12 +322,19 @@ function updateGame(game) {
             game.score += 0.5; //0.5 because there are 2 pipes! so 0.5*2 = 1, 1 for each set of pipes
             pipe.passed = true;
 
+            // Play point sound when score increases by a full point (every 2 pipes)
+            if (Math.floor(game.score) > Math.floor(game.score - 0.5)) {
+                playSound(sfxPoint);
+            }
+
             // Update difficulty when score changes
             updateDifficulty(game);
         }
 
         if (detectCollision(game.bird, pipe) && !game.gameOver) {
             game.gameOver = true;
+            playSound(sfxHit);
+            playSound(sfxDie);
         }
     }
 
@@ -390,6 +409,7 @@ function moveBird(e) {
             // Trigger flap animation
             game1.isFlapping = true;
             game1.flapAnimation = 0;
+            playSound(sfxWing);
         }
     }
 
@@ -401,6 +421,7 @@ function moveBird(e) {
             // Trigger flap animation
             game2.isFlapping = true;
             game2.flapAnimation = 0;
+            playSound(sfxWing);
         }
     }
 
@@ -554,4 +575,15 @@ function resetGame(game) {
     game.gameOverPanel.y = boardHeight;
     game.gameOverPanel.velocity = 0;
     game.gameOverPanel.settled = false;
+}
+
+function playSound(audio) {
+    if (audio) {
+        // Reset audio to beginning and play
+        audio.currentTime = 0;
+        audio.play().catch(e => {
+            // Handle autoplay restrictions gracefully
+            console.log("Audio play failed:", e);
+        });
+    }
 }
