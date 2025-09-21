@@ -22,6 +22,17 @@ let sfxHit;
 let sfxDie;
 let sfxPoint;
 
+//easter egg
+let rianbaldImg;
+let rianbaldTrigger = {
+    game1: false,
+    game2: false
+};
+let rianbaldAnimation = {
+    game1: { active: false, timer: 0, y: 0, targetY: 0 },
+    game2: { active: false, timer: 0, y: 0, targetY: 0 }
+};
+
 //pipes
 let pipeWidth = 64; //width/height ratio = 384/3072 = 1/8
 let pipeHeight = 512;
@@ -175,6 +186,10 @@ window.onload = function () {
     sfxPoint = new Audio();
     sfxPoint.src = "./sfx_point.wav";
 
+    //load easter egg image
+    rianbaldImg = new Image();
+    rianbaldImg.src = "./rianbald.png";
+
     requestAnimationFrame(update);
 
     // Dynamic pipe intervals that will be updated based on difficulty
@@ -283,7 +298,7 @@ function updateGame(game) {
     game.context.clearRect(0, 0, game.board.width, game.board.height);
 
     // AI decision making
-    const gameKey = game === game1 ? 'game1' : 'game2';
+    let gameKey = game === game1 ? 'game1' : 'game2';
     if (aiEnabled[gameKey] && !game.gameOver) {
         updateAI(game);
     }
@@ -349,6 +364,13 @@ function updateGame(game) {
                 playSound(sfxPoint);
             }
 
+            // Trigger rianbald easter egg at score 5
+            gameKey = game === game1 ? 'game1' : 'game2';
+            if (Math.floor(game.score) === 2 && !rianbaldTrigger[gameKey]) {
+                rianbaldTrigger[gameKey] = true;
+                triggerRianbaldEasterEgg(game, pipe);
+            }
+
             // Update difficulty when score changes
             updateDifficulty(game);
         }
@@ -384,6 +406,12 @@ function updateGame(game) {
             game.canRestart = true;
         }
         drawGameOverScreen(game);
+    }
+
+    // Draw rianbald easter egg
+    gameKey = game === game1 ? 'game1' : 'game2';
+    if (rianbaldAnimation[gameKey].active) {
+        drawRianbaldEasterEgg(game, gameKey);
     }
 }
 
@@ -603,6 +631,11 @@ function resetGame(game) {
     game.gameOverPanel.y = boardHeight;
     game.gameOverPanel.velocity = 0;
     game.gameOverPanel.settled = false;
+
+    // Reset rianbald easter egg
+    gameKey = game === game1 ? 'game1' : 'game2';
+    rianbaldTrigger[gameKey] = false;
+    rianbaldAnimation[gameKey] = { active: false, timer: 0, y: 0, targetY: 0 };
 }
 
 function playSound(audio) {
@@ -616,98 +649,117 @@ function playSound(audio) {
     }
 }
 
-// AI Logic - simulates human-like play with mistakes
+// AI Logic - realistic human-like play
 function updateAI(game) {
-    // Increase reaction time counter
-    game.aiReactionTime++;
-    
-    // Find the next pipe that the bird needs to navigate
-    let nextPipe = null;
-    let minDistance = Infinity;
-    
+    // Simple and effective approach: find any pipe ahead of the bird
+    let targetPipe = null;
+    let pipeDistance = Infinity;
+
+    // Look for the next pipe the bird will encounter
     for (let pipe of game.pipeArray) {
-        if (pipe.x + pipe.width > game.bird.x && pipe.x < game.bird.x + 200) {
+        if (pipe.x + pipe.width > game.bird.x + game.bird.width) {
             let distance = pipe.x - game.bird.x;
-            if (distance < minDistance) {
-                minDistance = distance;
-                nextPipe = pipe;
+            if (distance < pipeDistance) {
+                pipeDistance = distance;
+                targetPipe = pipe;
             }
         }
     }
-    
-    if (nextPipe) {
-        // Calculate the gap center between top and bottom pipes
-        let topPipe = nextPipe;
-        let bottomPipe = null;
-        
-        // Find the corresponding bottom pipe
-        for (let pipe of game.pipeArray) {
-            if (pipe.x === nextPipe.x && pipe.y > nextPipe.y) {
-                bottomPipe = pipe;
-                break;
+
+    let shouldJump = false;
+    let birdBottom = game.bird.y + game.bird.height;
+    let birdCenter = game.bird.y + game.bird.height / 2;
+
+    if (targetPipe) {
+        // Determine if this is a top or bottom pipe and find the gap
+        let gapTop, gapBottom;
+
+        if (targetPipe.y < 0) {
+            // This is a top pipe, find the corresponding bottom pipe
+            gapTop = targetPipe.y + targetPipe.height;
+            for (let pipe of game.pipeArray) {
+                if (pipe.x === targetPipe.x && pipe.y > targetPipe.y) {
+                    gapBottom = pipe.y;
+                    break;
+                }
+            }
+        } else {
+            // This is a bottom pipe, find the corresponding top pipe
+            gapBottom = targetPipe.y;
+            for (let pipe of game.pipeArray) {
+                if (pipe.x === targetPipe.x && pipe.y < targetPipe.y) {
+                    gapTop = pipe.y + pipe.height;
+                    break;
+                }
             }
         }
-        
-        if (bottomPipe) {
-            let gapCenter = topPipe.y + topPipe.height + (bottomPipe.y - (topPipe.y + topPipe.height)) / 2;
-            let birdCenter = game.bird.y + game.bird.height / 2;
-            
-            // AI decision making with human-like imperfections
-            let shouldJump = false;
-            
-            // Basic logic: jump if bird is below gap center
-            if (birdCenter > gapCenter + 10) { // 10px tolerance
+
+        if (gapTop !== undefined && gapBottom !== undefined) {
+            let gapCenter = gapTop + (gapBottom - gapTop) / 2;
+            let gapSize = gapBottom - gapTop;
+
+            // Human-like strategy: aim for the center, jump when below it
+            let comfortZone = gapSize * 0.3; // Stay in middle 30% of gap
+            let upperBound = gapCenter - comfortZone;
+            let lowerBound = gapCenter + comfortZone;
+
+            // Jump if bird is below the comfort zone or falling toward it
+            if (birdCenter > lowerBound ||
+                (birdCenter > gapCenter && game.velocityY > 1)) {
                 shouldJump = true;
             }
-            
-            // Panic mode when close to pipes
-            if (minDistance < 80) {
-                game.aiPanicMode = true;
-                // In panic mode, make more erratic decisions
-                if (Math.random() < 0.3) {
-                    shouldJump = !shouldJump; // Sometimes panic and do opposite
-                }
-            } else {
-                game.aiPanicMode = false;
+
+            // Don't jump if way above the gap (unless falling fast)
+            if (birdCenter < upperBound - 40 && game.velocityY < 3) {
+                shouldJump = false;
             }
-            
-            // Add human-like reaction delay (3-8 frames)
-            let reactionDelay = 3 + Math.random() * 5;
-            
-            // Make mistakes occasionally
-            if (Math.random() < game.aiMistakeChance) {
-                shouldJump = !shouldJump; // Make wrong decision
-                console.log("AI made a mistake!");
+
+            // Early jump when pipe is close and bird is low
+            if (pipeDistance < 100 && birdCenter > gapCenter + 10) {
+                shouldJump = true;
             }
-            
-            // Increase mistake chance as score gets higher (pressure)
-            game.aiMistakeChance = 0.02 + (game.score * 0.001);
-            
-            // Only make decision if enough time has passed since last decision
-            if (shouldJump && game.aiReactionTime > reactionDelay && 
-                Date.now() - game.aiLastDecision > 100) { // Minimum 100ms between jumps
-                
-                // Execute jump
-                game.velocityY = -6;
-                game.isFlapping = true;
-                game.flapAnimation = 0;
-                playSound(sfxWing);
-                
-                game.aiLastDecision = Date.now();
-                game.aiReactionTime = 0;
-            }
+        }
+    } else {
+        // No pipes visible - maintain middle height
+        let middleHeight = boardHeight / 2;
+        if (birdCenter > middleHeight + 30) {
+            shouldJump = true;
         }
     }
-    
-    // Emergency jump if bird is falling too fast near ground
-    if (game.bird.y > boardHeight - 150 && game.velocityY > 3) {
-        if (Math.random() < 0.8) { // 80% chance to save itself
-            game.velocityY = -6;
-            game.isFlapping = true;
-            game.flapAnimation = 0;
-            playSound(sfxWing);
-            game.aiLastDecision = Date.now();
-        }
+
+    // Ground avoidance - critical safety check
+    if (game.bird.y > boardHeight - 100) {
+        shouldJump = true;
+    }
+
+    // Ceiling avoidance
+    if (game.bird.y < 50 && game.velocityY < 0) {
+        shouldJump = false;
+    }
+
+    // Human-like imperfections - starts at 0.2%, increases by 0.05% per point, caps at 10%
+    let mistakeChance = Math.min(0.002 + (game.score * 0.0005), 0.10);
+    if (Math.random() < mistakeChance && game.score > 2) {
+        shouldJump = !shouldJump;
+        console.log(`AI made a mistake! (${(mistakeChance * 100).toFixed(1)}% chance)`);
+    }
+
+    // Realistic reaction time - humans aren't instant
+    game.aiReactionTime++;
+    let reactionDelay = 2 + Math.random() * 3; // 2-5 frames (33-83ms at 60fps)
+
+    // Execute jump with human-like timing
+    if (shouldJump &&
+        game.aiReactionTime >= reactionDelay &&
+        Date.now() - game.aiLastDecision > 120) { // Prevent spam jumping
+
+        game.velocityY = -6;
+        game.isFlapping = true;
+        game.flapAnimation = 0;
+        playSound(sfxWing);
+
+        game.aiLastDecision = Date.now();
+        game.aiReactionTime = 0;
     }
 }
 
@@ -717,12 +769,12 @@ function toggleAI(player = 'both') {
         aiEnabled.game1 = !aiEnabled.game1;
         console.log(`AI for Player 1 (left): ${aiEnabled.game1 ? 'ENABLED' : 'DISABLED'}`);
     }
-    
+
     if (player === 'both' || player === 2) {
         aiEnabled.game2 = !aiEnabled.game2;
         console.log(`AI for Player 2 (right): ${aiEnabled.game2 ? 'ENABLED' : 'DISABLED'}`);
     }
-    
+
     if (player !== 1 && player !== 2 && player !== 'both') {
         console.log('Usage: toggleAI() or toggleAI(1) or toggleAI(2)');
         console.log('Current status:');
@@ -733,3 +785,43 @@ function toggleAI(player = 'both') {
 
 // Make toggleAI available globally
 window.toggleAI = toggleAI;
+
+// Rianbald Easter Egg Functions
+function triggerRianbaldEasterEgg(game, triggerPipe) {
+    gameKey = game === game1 ? 'game1' : 'game2';
+
+    // Simple popup in center of screen
+    rianbaldAnimation[gameKey].active = true;
+    rianbaldAnimation[gameKey].timer = 0;
+    rianbaldAnimation[gameKey].x = boardWidth * 0.75; // 75% to the right
+    rianbaldAnimation[gameKey].y = boardHeight / 2; // Center vertically
+
+    console.log("Rianbald easter egg triggered at score:", Math.floor(game.score));
+}
+
+function drawRianbaldEasterEgg(game, gameKey) {
+    let anim = rianbaldAnimation[gameKey];
+    anim.timer++;
+
+    // Show for 2 seconds (120 frames at 60fps)
+    if (anim.timer > 120) {
+        anim.active = false;
+        return;
+    }
+
+    // Draw rianbald image
+    if (rianbaldImg && rianbaldImg.complete) {
+        let imgWidth = 50;
+        let imgHeight = 50;
+
+        // Simple shake effect
+        let shakeX = (Math.random() - 0.5) * 4;
+        let shakeY = (Math.random() - 0.5) * 4;
+
+        let x = anim.x - imgWidth / 2 + shakeX;
+        let y = anim.y - imgHeight / 2 + shakeY;
+
+        game.context.drawImage(rianbaldImg, x, y, imgWidth, imgHeight);
+    }
+}
+
