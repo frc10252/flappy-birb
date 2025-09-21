@@ -13,8 +13,8 @@ let birdImg;
 
 //bird animation
 let birdAnimFrames = [];
-let animationSpeed = 8; // frames per animation frame
-let flapAnimationDuration = 20; // frames to show flap animation
+let animationSpeed = 4; // frames per animation frame (reduced from 8 for faster animation)
+let flapAnimationDuration = 12; // frames to show flap animation (reduced from 20)
 
 //sound effects
 let sfxWing;
@@ -233,11 +233,11 @@ function updateBirdAnimation(game) {
     if (game.isFlapping) {
         game.flapAnimation++;
         // Calculate which frame to show (0, 1, 2, then back to 0)
-        const frameIndex = Math.floor(game.flapAnimation / 7) % 3; // 7 frames per animation frame for smoother transition
+        const frameIndex = Math.floor(game.flapAnimation / 3) % 3; // 3 frames per animation frame for faster transition
         game.animationFrame = frameIndex;
 
-        // End animation after one complete cycle (3 frames * 7 = 21 frames)
-        if (game.flapAnimation >= 21) {
+        // End animation after one complete cycle (3 frames * 3 = 9 frames)
+        if (game.flapAnimation >= 9) {
             game.isFlapping = false;
             game.flapAnimation = 0;
             game.animationFrame = 0; // Reset to first frame when not flapping
