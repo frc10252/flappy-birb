@@ -91,10 +91,7 @@ let game1 = {
     flapAnimation: 0,
     isFlapping: false,
     // AI properties
-    aiReactionTime: 0,
-    aiMistakeChance: 0.02,
-    aiLastDecision: 0,
-    aiPanicMode: false
+    aiLastDecision: 0
 };
 
 let game2 = {
@@ -128,10 +125,7 @@ let game2 = {
     flapAnimation: 0,
     isFlapping: false,
     // AI properties
-    aiReactionTime: 0,
-    aiMistakeChance: 0.02,
-    aiLastDecision: 0,
-    aiPanicMode: false
+    aiLastDecision: 0
 };
 
 window.onload = function () {
@@ -366,7 +360,7 @@ function updateGame(game) {
 
             // Trigger rianbald easter egg at score 5
             gameKey = game === game1 ? 'game1' : 'game2';
-            if (Math.floor(game.score) === 2 && !rianbaldTrigger[gameKey]) {
+            if ((Math.floor(game.score) === 41 || Math.floor(game.score) === 67 || Math.floor(game.score) % 100 === 0) && !rianbaldTrigger[gameKey]) {
                 rianbaldTrigger[gameKey] = true;
                 triggerRianbaldEasterEgg(game, pipe);
             }
@@ -613,10 +607,7 @@ function resetGame(game) {
     game.isFlapping = false;
 
     // Reset AI states
-    game.aiReactionTime = 0;
-    game.aiMistakeChance = 0.02;
     game.aiLastDecision = 0;
-    game.aiPanicMode = false;
 
     // Reset difficulty settings
     velocityX = baseVelocityX;
@@ -649,118 +640,77 @@ function playSound(audio) {
     }
 }
 
-// AI Logic - realistic human-like play
+// PERFECT AI - Always stays in the exact middle of pipe gaps
 function updateAI(game) {
-    // Simple and effective approach: find any pipe ahead of the bird
-    let targetPipe = null;
-    let pipeDistance = Infinity;
-
-    // Look for the next pipe the bird will encounter
-    for (let pipe of game.pipeArray) {
-        if (pipe.x + pipe.width > game.bird.x + game.bird.width) {
-            let distance = pipe.x - game.bird.x;
-            if (distance < pipeDistance) {
-                pipeDistance = distance;
-                targetPipe = pipe;
-            }
-        }
-    }
-
-    let shouldJump = false;
-    let birdBottom = game.bird.y + game.bird.height;
+    // Find the next pipe gap the bird needs to navigate through
+    let nextGap = findNextPipeGap(game);
     let birdCenter = game.bird.y + game.bird.height / 2;
 
-    if (targetPipe) {
-        // Determine if this is a top or bottom pipe and find the gap
-        let gapTop, gapBottom;
+    if (nextGap) {
+        // Calculate the exact middle of the gap
+        let gapMiddle = nextGap.top + (nextGap.bottom - nextGap.top) / 2;
 
-        if (targetPipe.y < 0) {
-            // This is a top pipe, find the corresponding bottom pipe
-            gapTop = targetPipe.y + targetPipe.height;
-            for (let pipe of game.pipeArray) {
-                if (pipe.x === targetPipe.x && pipe.y > targetPipe.y) {
-                    gapBottom = pipe.y;
-                    break;
-                }
-            }
-        } else {
-            // This is a bottom pipe, find the corresponding top pipe
-            gapBottom = targetPipe.y;
-            for (let pipe of game.pipeArray) {
-                if (pipe.x === targetPipe.x && pipe.y < targetPipe.y) {
-                    gapTop = pipe.y + pipe.height;
-                    break;
-                }
-            }
-        }
-
-        if (gapTop !== undefined && gapBottom !== undefined) {
-            let gapCenter = gapTop + (gapBottom - gapTop) / 2;
-            let gapSize = gapBottom - gapTop;
-
-            // Human-like strategy: aim for the center, jump when below it
-            let comfortZone = gapSize * 0.3; // Stay in middle 30% of gap
-            let upperBound = gapCenter - comfortZone;
-            let lowerBound = gapCenter + comfortZone;
-
-            // Jump if bird is below the comfort zone or falling toward it
-            if (birdCenter > lowerBound ||
-                (birdCenter > gapCenter && game.velocityY > 1)) {
-                shouldJump = true;
-            }
-
-            // Don't jump if way above the gap (unless falling fast)
-            if (birdCenter < upperBound - 40 && game.velocityY < 3) {
-                shouldJump = false;
-            }
-
-            // Early jump when pipe is close and bird is low
-            if (pipeDistance < 100 && birdCenter > gapCenter + 10) {
-                shouldJump = true;
-            }
+        // Perfect positioning: jump if bird center is below the gap middle
+        if (birdCenter > gapMiddle) {
+            executeJump(game);
         }
     } else {
-        // No pipes visible - maintain middle height
-        let middleHeight = boardHeight / 2;
-        if (birdCenter > middleHeight + 30) {
-            shouldJump = true;
+        // No pipes visible - stay at screen center
+        let screenCenter = boardHeight / 2;
+        if (birdCenter > screenCenter) {
+            executeJump(game);
+        }
+    }
+}
+
+// Helper function to find the next pipe gap
+function findNextPipeGap(game) {
+    let closestDistance = Infinity;
+    let nextGap = null;
+
+    // Group pipes by x position to find pairs
+    let pipeGroups = {};
+
+    for (let pipe of game.pipeArray) {
+        // Only consider pipes that are ahead of the bird
+        if (pipe.x + pipe.width > game.bird.x) {
+            if (!pipeGroups[pipe.x]) {
+                pipeGroups[pipe.x] = [];
+            }
+            pipeGroups[pipe.x].push(pipe);
         }
     }
 
-    // Ground avoidance - critical safety check
-    if (game.bird.y > boardHeight - 100) {
-        shouldJump = true;
+    // Find the closest pipe pair
+    for (let x in pipeGroups) {
+        let distance = parseInt(x) - game.bird.x;
+        if (distance < closestDistance && pipeGroups[x].length === 2) {
+            closestDistance = distance;
+
+            // Determine top and bottom of gap
+            let pipes = pipeGroups[x];
+            let topPipe = pipes[0].y < pipes[1].y ? pipes[0] : pipes[1];
+            let bottomPipe = pipes[0].y > pipes[1].y ? pipes[0] : pipes[1];
+
+            nextGap = {
+                x: parseInt(x),
+                top: topPipe.y + topPipe.height,
+                bottom: bottomPipe.y,
+                distance: distance
+            };
+        }
     }
 
-    // Ceiling avoidance
-    if (game.bird.y < 50 && game.velocityY < 0) {
-        shouldJump = false;
-    }
+    return nextGap;
+}
 
-    // Human-like imperfections - starts at 0.2%, increases by 0.05% per point, caps at 10%
-    let mistakeChance = Math.min(0.002 + (game.score * 0.0005), 0.10);
-    if (Math.random() < mistakeChance && game.score > 2) {
-        shouldJump = !shouldJump;
-        console.log(`AI made a mistake! (${(mistakeChance * 100).toFixed(1)}% chance)`);
-    }
-
-    // Realistic reaction time - humans aren't instant
-    game.aiReactionTime++;
-    let reactionDelay = 2 + Math.random() * 3; // 2-5 frames (33-83ms at 60fps)
-
-    // Execute jump with human-like timing
-    if (shouldJump &&
-        game.aiReactionTime >= reactionDelay &&
-        Date.now() - game.aiLastDecision > 120) { // Prevent spam jumping
-
-        game.velocityY = -6;
-        game.isFlapping = true;
-        game.flapAnimation = 0;
-        playSound(sfxWing);
-
-        game.aiLastDecision = Date.now();
-        game.aiReactionTime = 0;
-    }
+// Execute perfect jump with no delays
+function executeJump(game) {
+    // No cooldown needed - perfect timing
+    game.velocityY = -6;
+    game.isFlapping = true;
+    game.flapAnimation = 0;
+    playSound(sfxWing);
 }
 
 // Console command to toggle AI
