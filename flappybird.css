@@ -1,9 +1,25 @@
 body {
     font-family:'Courier New', Courier, monospace;
     text-align: center;
+    margin: 0;
+    padding: 0;
+    background-color: #87CEEB;
+    overflow: hidden;
 }
 
-#board {
-    /* background-color: skyblue; */
+#game-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    gap: 20px;
+    transition: transform 0.3s ease;
+}
+
+#board1, #board2 {
     background-image: url("./flappybirdbg.png");
+    border: 3px solid #7f441a;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }

@@ -1,26 +1,22 @@
 
-//board
-let board;
+//board - responsive sizing
 let boardWidth = 360;
 let boardHeight = 640;
-let context;
+let canvasScale = 1;
 
 //bird
 let birdWidth = 34; //width/height ratio = 408/228 = 17/12
 let birdHeight = 24;
-let birdX = boardWidth/8;
-let birdY = boardHeight/2;
+let birdX = boardWidth / 8;
+let birdY = boardHeight / 2;
 let birdImg;
 
-let bird = {
-    x : birdX,
-    y : birdY,
-    width : birdWidth,
-    height : birdHeight
-}
+//bird animation
+let birdAnimFrames = [];
+let animationSpeed = 8; // frames per animation frame
+let flapAnimationDuration = 20; // frames to show flap animation
 
 //pipes
-let pipeArray = [];
 let pipeWidth = 64; //width/height ratio = 384/3072 = 1/8
 let pipeHeight = 512;
 let pipeX = boardWidth;
@@ -30,28 +26,110 @@ let topPipeImg;
 let bottomPipeImg;
 
 //physics
-let velocityX = -2; //pipes moving left speed
-let velocityY = 0; //bird jump speed
-let gravity = 0.4;
+let baseVelocityX = -2; //base pipes moving left speed
+let velocityX = -2; //current pipes moving left speed
+let gravity = 0.41;
+let bounceVelocity = -7; //bounce when hitting ground
 
-let gameOver = false;
-let score = 0;
+//difficulty settings
+let basePipeInterval = 1500; //base pipe spawn interval in ms
+let baseOpeningSpace = boardHeight / 4; //base gap between pipes
+let currentPipeInterval = basePipeInterval;
 
-window.onload = function() {
-    board = document.getElementById("board");
-    board.height = boardHeight;
-    board.width = boardWidth;
-    context = board.getContext("2d"); //used for drawing on the board
+//game instances for both players
+let game1 = {
+    board: null,
+    context: null,
+    bird: {
+        x: birdX,
+        y: birdY,
+        width: birdWidth,
+        height: birdHeight
+    },
+    pipeArray: [],
+    velocityY: 0,
+    gameOver: false,
+    score: 0,
+    deathAnimation: false,
+    deathTimer: 0,
+    hasBounced: false,
+    gameOverScreenTimer: 0,
+    canRestart: false,
+    gameOverPanel: {
+        y: boardHeight,
+        targetY: boardHeight / 2 - 100,
+        velocity: 0,
+        settled: false
+    },
+    pipeInterval: null,
+    lastDifficultyUpdate: 0,
+    animationFrame: 0,
+    animationTimer: 0,
+    flapAnimation: 0,
+    isFlapping: false
+};
 
-    //draw flappy bird
-    // context.fillStyle = "green";
-    // context.fillRect(bird.x, bird.y, bird.width, bird.height);
+let game2 = {
+    board: null,
+    context: null,
+    bird: {
+        x: birdX,
+        y: birdY,
+        width: birdWidth,
+        height: birdHeight
+    },
+    pipeArray: [],
+    velocityY: 0,
+    gameOver: false,
+    score: 0,
+    deathAnimation: false,
+    deathTimer: 0,
+    hasBounced: false,
+    gameOverScreenTimer: 0,
+    canRestart: false,
+    gameOverPanel: {
+        y: boardHeight,
+        targetY: boardHeight / 2 - 100,
+        velocity: 0,
+        settled: false
+    },
+    pipeInterval: null,
+    lastDifficultyUpdate: 0,
+    animationFrame: 0,
+    animationTimer: 0,
+    flapAnimation: 0,
+    isFlapping: false
+};
+
+window.onload = function () {
+    setupResponsiveCanvas();
+
+    //left side game
+    game1.board = document.getElementById("board1");
+    game1.board.height = boardHeight;
+    game1.board.width = boardWidth;
+    game1.context = game1.board.getContext("2d");
+
+    //right side game
+    game2.board = document.getElementById("board2");
+    game2.board.height = boardHeight;
+    game2.board.width = boardWidth;
+    game2.context = game2.board.getContext("2d");
 
     //load images
     birdImg = new Image();
     birdImg.src = "./flappybird.png";
-    birdImg.onload = function() {
-        context.drawImage(birdImg, bird.x, bird.y, bird.width, bird.height);
+
+    // Load bird animation frames
+    for (let i = 0; i < 4; i++) {
+        let frame = new Image();
+        frame.src = `./flappybird${i}.png`;
+        birdAnimFrames.push(frame);
+    }
+
+    birdImg.onload = function () {
+        game1.context.drawImage(birdImg, game1.bird.x, game1.bird.y, game1.bird.width, game1.bird.height);
+        game2.context.drawImage(birdImg, game2.bird.x, game2.bird.y, game2.bird.width, game2.bird.height);
     }
 
     topPipeImg = new Image();
@@ -61,108 +139,419 @@ window.onload = function() {
     bottomPipeImg.src = "./bottompipe.png";
 
     requestAnimationFrame(update);
-    setInterval(placePipes, 1500); //every 1.5 seconds
+
+    // Dynamic pipe intervals that will be updated based on difficulty
+    let pipeInterval1 = setInterval(() => placePipes(game1), currentPipeInterval);
+    let pipeInterval2 = setInterval(() => placePipes(game2), currentPipeInterval);
+
+    // Store intervals for later clearing and recreation
+    game1.pipeInterval = pipeInterval1;
+    game2.pipeInterval = pipeInterval2;
+
     document.addEventListener("keydown", moveBird);
+    window.addEventListener("resize", setupResponsiveCanvas);
+}
+
+function setupResponsiveCanvas() {
+    const container = document.getElementById("game-container");
+    const containerWidth = window.innerWidth;
+    const containerHeight = window.innerHeight;
+
+    // Calculate scale to fit both canvases side by side
+    const totalWidth = boardWidth * 2 + 20; // 20px gap between canvas
+    const scaleX = containerWidth / totalWidth;
+    const scaleY = containerHeight / boardHeight;
+    canvasScale = Math.min(scaleX, scaleY, 1); //scale limitation
+
+    //scaling to the container we are in
+    container.style.transform = `scale(${canvasScale})`;
+    container.style.transformOrigin = 'center center';
+}
+
+function calculateDifficulty(score) {
+    // Square root function for progressive difficulty
+    // Starts at 1.0 and increases gradually
+    const difficultyMultiplier = 1 + Math.sqrt(score) * 0.1;
+
+    // Calculate new pipe speed (faster as score increases)
+    const newVelocityX = baseVelocityX * difficultyMultiplier;
+
+    // Calculate new pipe interval (more frequent pipes, but not too crazy)
+    const newPipeInterval = Math.max(basePipeInterval / (1 + Math.sqrt(score) * 0.05), 800);
+
+    // Calculate new opening space (smaller gap, but keep it playable)
+    const newOpeningSpace = Math.max(baseOpeningSpace - Math.sqrt(score) * 2, baseOpeningSpace * 0.6);
+
+    return {
+        velocityX: Math.max(newVelocityX, baseVelocityX * 2.5), // Cap at 2.5x speed
+        pipeInterval: newPipeInterval,
+        openingSpace: newOpeningSpace
+    };
+}
+
+function updateDifficulty(game) {
+    // Update difficulty every 5 points to avoid constant changes
+    const scoreThreshold = Math.floor(game.score / 5) * 5;
+
+    if (scoreThreshold > game.lastDifficultyUpdate) {
+        game.lastDifficultyUpdate = scoreThreshold;
+
+        const difficulty = calculateDifficulty(game.score);
+        velocityX = difficulty.velocityX;
+
+        // Update pipe interval by clearing old interval and creating new one
+        if (game.pipeInterval) {
+            clearInterval(game.pipeInterval);
+            game.pipeInterval = setInterval(() => placePipes(game), difficulty.pipeInterval);
+        }
+    }
+}
+
+function updateBirdAnimation(game) {
+    // Handle flap animation when jumping
+    if (game.isFlapping) {
+        game.flapAnimation++;
+        if (game.flapAnimation >= flapAnimationDuration) {
+            game.isFlapping = false;
+            game.flapAnimation = 0;
+        }
+    }
+
+    // Update idle animation timer
+    game.animationTimer++;
+    if (game.animationTimer >= animationSpeed) {
+        game.animationTimer = 0;
+        if (!game.isFlapping) {
+            game.animationFrame = (game.animationFrame + 1) % 4;
+        }
+    }
+}
+
+function drawBird(game) {
+    let currentFrame;
+
+    if (game.isFlapping) {
+        // Use rapid flap animation when jumping
+        const flapFrame = Math.floor(game.flapAnimation / 5) % 4;
+        currentFrame = birdAnimFrames[flapFrame];
+    } else {
+        // Use slower idle animation
+        currentFrame = birdAnimFrames[game.animationFrame];
+    }
+
+    // Use fallback if animation frames aren't loaded yet
+    if (!currentFrame || !currentFrame.complete) {
+        currentFrame = birdImg;
+    }
+
+    game.context.drawImage(currentFrame, game.bird.x, game.bird.y, game.bird.width, game.bird.height);
 }
 
 function update() {
     requestAnimationFrame(update);
-    if (gameOver) {
-        return;
+    updateGame(game1);
+    updateGame(game2);
+}
+
+function updateGame(game) {
+    game.context.clearRect(0, 0, game.board.width, game.board.height);
+
+    // Handle death animation
+    if (game.gameOver && !game.deathAnimation) {
+        game.deathAnimation = true;
+        game.deathTimer = 0;
     }
-    context.clearRect(0, 0, board.width, board.height);
 
-    //bird
-    velocityY += gravity;
-    // bird.y += velocityY;
-    bird.y = Math.max(bird.y + velocityY, 0); //apply gravity to current bird.y, limit the bird.y to top of the canvas
-    context.drawImage(birdImg, bird.x, bird.y, bird.width, bird.height);
+    if (game.deathAnimation) {
+        game.deathTimer++;
+        //continue bird physics during animation
+        game.velocityY += gravity;
+        game.bird.y += game.velocityY;
 
-    if (bird.y > board.height) {
-        gameOver = true;
+        //bounce only once when hitting ground
+        if (game.bird.y > game.board.height - 90 && !game.hasBounced) {
+            game.bird.y = game.board.height - 90;
+            if (game.velocityY > 0) {
+                game.velocityY = bounceVelocity;
+                game.hasBounced = true;
+            }
+        }
+
+        //draw bird with slight rot
+        game.context.save();
+        game.context.translate(game.bird.x + game.bird.width / 2, game.bird.y + game.bird.height / 2);
+        game.context.rotate(Math.PI / 4); //45 deg rotation
+        game.context.drawImage(birdImg, -game.bird.width / 2, -game.bird.height / 2, game.bird.width, game.bird.height);
+        game.context.restore();
+    } else if (!game.gameOver) {
+        //bird - normal gameplay
+        game.velocityY += gravity;
+        game.bird.y = Math.max(game.bird.y + game.velocityY, 0); //apply gravity to current bird.y, limit the bird.y to top of the canvas
+
+        // Update and draw bird animation
+        updateBirdAnimation(game);
+        drawBird(game);
+
+        //check for death
+        if (game.bird.y > game.board.height - 90 || game.bird.y <= 0) {
+            game.gameOver = true;
+        }
     }
 
     //pipes
-    for (let i = 0; i < pipeArray.length; i++) {
-        let pipe = pipeArray[i];
-        pipe.x += velocityX;
-        context.drawImage(pipe.img, pipe.x, pipe.y, pipe.width, pipe.height);
+    for (let i = 0; i < game.pipeArray.length; i++) {
+        let pipe = game.pipeArray[i];
+        if (!game.gameOver) {
+            pipe.x += velocityX;
+        }
+        game.context.drawImage(pipe.img, pipe.x, pipe.y, pipe.width, pipe.height);
 
-        if (!pipe.passed && bird.x > pipe.x + pipe.width) {
-            score += 0.5; //0.5 because there are 2 pipes! so 0.5*2 = 1, 1 for each set of pipes
+        if (!pipe.passed && game.bird.x > pipe.x + pipe.width && !game.gameOver) {
+            game.score += 0.5; //0.5 because there are 2 pipes! so 0.5*2 = 1, 1 for each set of pipes
             pipe.passed = true;
+
+            // Update difficulty when score changes
+            updateDifficulty(game);
         }
 
-        if (detectCollision(bird, pipe)) {
-            gameOver = true;
+        if (detectCollision(game.bird, pipe) && !game.gameOver) {
+            game.gameOver = true;
         }
     }
 
     //clear pipes
-    while (pipeArray.length > 0 && pipeArray[0].x < -pipeWidth) {
-        pipeArray.shift(); //removes first element from the array
+    while (game.pipeArray.length > 0 && game.pipeArray[0].x < -pipeWidth) {
+        game.pipeArray.shift(); //removes first element from the array
     }
 
-    //score
-    context.fillStyle = "white";
-    context.font="45px sans-serif";
-    context.fillText(score, 5, 45);
+    //score - nice styling without box
+    if (!game.gameOver || game.deathTimer <= 60) {
+        // Score shadow
+        game.context.fillStyle = "rgba(0, 0, 0, 0.7)";
+        game.context.font = "bold 32px 'Courier New', monospace";
+        game.context.fillText(Math.floor(game.score), 12, 42);
 
-    if (gameOver) {
-        context.fillText("GAME OVER", 5, 90);
+        // Main score text
+        game.context.fillStyle = "#FFD93D";
+        game.context.fillText(Math.floor(game.score), 10, 40);
+    }
+
+    // Enhanced game over screen
+    if (game.gameOver && game.deathTimer > 60) { // Show after 1 second of death animation
+        game.gameOverScreenTimer++;
+        if (game.gameOverScreenTimer > 60) { // Allow restart after 1 second of game over screen
+            game.canRestart = true;
+        }
+        drawGameOverScreen(game);
     }
 }
 
-function placePipes() {
-    if (gameOver) {
+function placePipes(game) {
+    if (game.gameOver) {
         return;
     }
 
     //(0-1) * pipeHeight/2.
     // 0 -> -128 (pipeHeight/4)
     // 1 -> -128 - 256 (pipeHeight/4 - pipeHeight/2) = -3/4 pipeHeight
-    let randomPipeY = pipeY - pipeHeight/4 - Math.random()*(pipeHeight/2);
-    let openingSpace = board.height/4;
+    let randomPipeY = pipeY - pipeHeight / 4 - Math.random() * (pipeHeight / 2);
+
+    // Use dynamic opening space based on current difficulty
+    const difficulty = calculateDifficulty(game.score);
+    let openingSpace = difficulty.openingSpace;
 
     let topPipe = {
-        img : topPipeImg,
-        x : pipeX,
-        y : randomPipeY,
-        width : pipeWidth,
-        height : pipeHeight,
-        passed : false
+        img: topPipeImg,
+        x: pipeX,
+        y: randomPipeY,
+        width: pipeWidth,
+        height: pipeHeight,
+        passed: false
     }
-    pipeArray.push(topPipe);
+    game.pipeArray.push(topPipe);
 
     let bottomPipe = {
-        img : bottomPipeImg,
-        x : pipeX,
-        y : randomPipeY + pipeHeight + openingSpace,
-        width : pipeWidth,
-        height : pipeHeight,
-        passed : false
+        img: bottomPipeImg,
+        x: pipeX,
+        y: randomPipeY + pipeHeight + openingSpace,
+        width: pipeWidth,
+        height: pipeHeight,
+        passed: false
     }
-    pipeArray.push(bottomPipe);
+    game.pipeArray.push(bottomPipe);
 }
 
 function moveBird(e) {
-    if (e.code == "Space" || e.code == "ArrowUp" || e.code == "KeyX") {
-        //jump
-        velocityY = -6;
+    // Player 1 controls (left side) - W key for jump, R key for restart
+    if (e.code == "KeyW") {
+        if (!game1.gameOver) {
+            //jump
+            game1.velocityY = -6;
+            // Trigger flap animation
+            game1.isFlapping = true;
+            game1.flapAnimation = 0;
+        }
+    }
 
-        //reset game
-        if (gameOver) {
-            bird.y = birdY;
-            pipeArray = [];
-            score = 0;
-            gameOver = false;
+    // Player 2 controls (right side) - I key for jump
+    if (e.code == "KeyI") {
+        if (!game2.gameOver) {
+            //jump
+            game2.velocityY = -6;
+            // Trigger flap animation
+            game2.isFlapping = true;
+            game2.flapAnimation = 0;
+        }
+    }
+
+    // R key restarts both games when both players are dead and ready
+    if (e.code == "KeyR") {
+        if (game1.gameOver && game2.gameOver && game1.canRestart && game2.canRestart) {
+            resetGame(game1);
+            resetGame(game2);
         }
     }
 }
 
 function detectCollision(a, b) {
     return a.x < b.x + b.width &&   //a's top left corner doesn't reach b's top right corner
-           a.x + a.width > b.x &&   //a's top right corner passes b's top left corner
-           a.y < b.y + b.height &&  //a's top left corner doesn't reach b's bottom left corner
-           a.y + a.height > b.y;    //a's bottom left corner passes b's top left corner
+        a.x + a.width > b.x &&   //a's top right corner passes b's top left corner
+        a.y < b.y + b.height &&  //a's top left corner doesn't reach b's bottom left corner
+        a.y + a.height > b.y;    //a's bottom left corner passes b's top left corner
+}
+
+function drawGameOverScreen(game) {
+    // Nice dark overlay
+    game.context.fillStyle = "rgba(0, 0, 0, 0.6)";
+    game.context.fillRect(0, 0, game.board.width, game.board.height);
+
+    // Update panel physics
+    updateGameOverPanel(game);
+
+    // Panel dimensions
+    const panelWidth = 280;
+    const panelHeight = 200;
+    const panelX = game.board.width / 2 - panelWidth / 2;
+    const panelY = game.gameOverPanel.y;
+
+    // Draw the flying panel with rounded corners effect
+    game.context.fillStyle = "rgba(40, 40, 40, 0.95)";
+    game.context.fillRect(panelX, panelY, panelWidth, panelHeight);
+
+    // Panel border
+    game.context.strokeStyle = "#FFD93D";
+    game.context.lineWidth = 3;
+    game.context.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+    // Inner shadow effect
+    game.context.strokeStyle = "rgba(0, 0, 0, 0.3)";
+    game.context.lineWidth = 1;
+    game.context.strokeRect(panelX + 2, panelY + 2, panelWidth - 4, panelHeight - 4);
+
+    game.context.textAlign = "center";
+
+    // Stylish "GAME OVER" text with shadow
+    const textY = panelY + 50;
+    game.context.fillStyle = "#000";
+    game.context.font = "bold 32px 'Courier New', monospace";
+    game.context.fillText("GAME OVER", game.board.width / 2 + 2, textY + 2);
+
+    game.context.fillStyle = "#8B0000";
+    game.context.fillText("GAME OVER", game.board.width / 2 + 1, textY + 1);
+
+    game.context.fillStyle = "#FF6B6B";
+    game.context.fillText("GAME OVER", game.board.width / 2, textY);
+
+    // Score display
+    const scoreY = panelY + 100;
+    game.context.fillStyle = "rgba(255, 217, 61, 0.2)";
+    game.context.fillRect(game.board.width / 2 - 70, scoreY - 20, 140, 30);
+
+    game.context.strokeStyle = "#FFD93D";
+    game.context.lineWidth = 1;
+    game.context.strokeRect(game.board.width / 2 - 70, scoreY - 20, 140, 30);
+
+    // Score text
+    game.context.fillStyle = "#333";
+    game.context.font = "bold 20px 'Courier New', monospace";
+    game.context.fillText(`SCORE: ${Math.floor(game.score)}`, game.board.width / 2 + 1, scoreY + 1);
+
+    game.context.fillStyle = "#FFD93D";
+    game.context.fillText(`SCORE: ${Math.floor(game.score)}`, game.board.width / 2, scoreY);
+
+    // Instructions
+    const instructY = panelY + 150;
+    const bothDead = game1.gameOver && game2.gameOver;
+    const bothReady = game1.canRestart && game2.canRestart;
+
+    if (bothDead && bothReady) {
+        game.context.fillStyle = "#4ECDC4";
+        game.context.font = "bold 16px 'Courier New', monospace";
+        game.context.fillText("Press R to restart both", game.board.width / 2, instructY);
+    } else if (game.gameOver) {
+        game.context.fillStyle = "#FFA500";
+        game.context.font = "14px 'Courier New', monospace";
+        game.context.fillText("Waiting for other player...", game.board.width / 2, instructY);
+    }
+
+    game.context.textAlign = "start";
+}
+
+function updateGameOverPanel(game) {
+    if (!game.gameOverPanel.settled) {
+        // Spring physics with damping
+        const spring = 0.3;
+        const damping = 0.7;
+
+        // Calculate force towards target
+        const force = (game.gameOverPanel.targetY - game.gameOverPanel.y) * spring;
+        game.gameOverPanel.velocity += force;
+        game.gameOverPanel.velocity *= damping;
+
+        // Update position
+        game.gameOverPanel.y += game.gameOverPanel.velocity;
+
+        // Check if settled (close enough and slow enough)
+        if (Math.abs(game.gameOverPanel.y - game.gameOverPanel.targetY) < 2 &&
+            Math.abs(game.gameOverPanel.velocity) < 0.5) {
+            game.gameOverPanel.settled = true;
+            game.gameOverPanel.y = game.gameOverPanel.targetY;
+            game.gameOverPanel.velocity = 0;
+        }
+    }
+}
+
+function resetGame(game) {
+    game.bird.y = birdY;
+    game.bird.x = birdX;
+    game.pipeArray = [];
+    game.score = 0;
+    game.gameOver = false;
+    game.deathAnimation = false;
+    game.deathTimer = 0;
+    game.velocityY = 0;
+    game.hasBounced = false;
+    game.gameOverScreenTimer = 0;
+    game.canRestart = false;
+    game.lastDifficultyUpdate = 0;
+
+    // Reset animation states
+    game.animationFrame = 0;
+    game.animationTimer = 0;
+    game.flapAnimation = 0;
+    game.isFlapping = false;
+
+    // Reset difficulty settings
+    velocityX = baseVelocityX;
+
+    // Reset pipe interval
+    if (game.pipeInterval) {
+        clearInterval(game.pipeInterval);
+        game.pipeInterval = setInterval(() => placePipes(game), basePipeInterval);
+    }
+
+    // Reset panel position
+    game.gameOverPanel.y = boardHeight;
+    game.gameOverPanel.velocity = 0;
+    game.gameOverPanel.settled = false;
 }
