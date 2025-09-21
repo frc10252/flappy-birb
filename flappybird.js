@@ -124,7 +124,7 @@ window.onload = function () {
 
     //load images
     birdImg = new Image();
-    birdImg.src = "./flappybird.png";
+    birdImg.src = "./flappybird0.png";
 
     // Load bird animation frames
     for (let i = 0; i < 3; i++) {
