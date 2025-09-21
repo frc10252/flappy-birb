@@ -42,6 +42,12 @@ let basePipeInterval = 1500; //base pipe spawn interval in ms
 let baseOpeningSpace = boardHeight / 4; //base gap between pipes
 let currentPipeInterval = basePipeInterval;
 
+//AI settings
+let aiEnabled = {
+    game1: false,
+    game2: false
+};
+
 //game instances for both players
 let game1 = {
     board: null,
@@ -72,7 +78,12 @@ let game1 = {
     animationFrame: 0,
     animationTimer: 0,
     flapAnimation: 0,
-    isFlapping: false
+    isFlapping: false,
+    // AI properties
+    aiReactionTime: 0,
+    aiMistakeChance: 0.02,
+    aiLastDecision: 0,
+    aiPanicMode: false
 };
 
 let game2 = {
@@ -104,7 +115,12 @@ let game2 = {
     animationFrame: 0,
     animationTimer: 0,
     flapAnimation: 0,
-    isFlapping: false
+    isFlapping: false,
+    // AI properties
+    aiReactionTime: 0,
+    aiMistakeChance: 0.02,
+    aiLastDecision: 0,
+    aiPanicMode: false
 };
 
 window.onload = function () {
@@ -265,6 +281,12 @@ function update() {
 
 function updateGame(game) {
     game.context.clearRect(0, 0, game.board.width, game.board.height);
+
+    // AI decision making
+    const gameKey = game === game1 ? 'game1' : 'game2';
+    if (aiEnabled[gameKey] && !game.gameOver) {
+        updateAI(game);
+    }
 
     // Handle death animation
     if (game.gameOver && !game.deathAnimation) {
@@ -562,6 +584,12 @@ function resetGame(game) {
     game.flapAnimation = 0;
     game.isFlapping = false;
 
+    // Reset AI states
+    game.aiReactionTime = 0;
+    game.aiMistakeChance = 0.02;
+    game.aiLastDecision = 0;
+    game.aiPanicMode = false;
+
     // Reset difficulty settings
     velocityX = baseVelocityX;
 
@@ -587,3 +615,121 @@ function playSound(audio) {
         });
     }
 }
+
+// AI Logic - simulates human-like play with mistakes
+function updateAI(game) {
+    // Increase reaction time counter
+    game.aiReactionTime++;
+    
+    // Find the next pipe that the bird needs to navigate
+    let nextPipe = null;
+    let minDistance = Infinity;
+    
+    for (let pipe of game.pipeArray) {
+        if (pipe.x + pipe.width > game.bird.x && pipe.x < game.bird.x + 200) {
+            let distance = pipe.x - game.bird.x;
+            if (distance < minDistance) {
+                minDistance = distance;
+                nextPipe = pipe;
+            }
+        }
+    }
+    
+    if (nextPipe) {
+        // Calculate the gap center between top and bottom pipes
+        let topPipe = nextPipe;
+        let bottomPipe = null;
+        
+        // Find the corresponding bottom pipe
+        for (let pipe of game.pipeArray) {
+            if (pipe.x === nextPipe.x && pipe.y > nextPipe.y) {
+                bottomPipe = pipe;
+                break;
+            }
+        }
+        
+        if (bottomPipe) {
+            let gapCenter = topPipe.y + topPipe.height + (bottomPipe.y - (topPipe.y + topPipe.height)) / 2;
+            let birdCenter = game.bird.y + game.bird.height / 2;
+            
+            // AI decision making with human-like imperfections
+            let shouldJump = false;
+            
+            // Basic logic: jump if bird is below gap center
+            if (birdCenter > gapCenter + 10) { // 10px tolerance
+                shouldJump = true;
+            }
+            
+            // Panic mode when close to pipes
+            if (minDistance < 80) {
+                game.aiPanicMode = true;
+                // In panic mode, make more erratic decisions
+                if (Math.random() < 0.3) {
+                    shouldJump = !shouldJump; // Sometimes panic and do opposite
+                }
+            } else {
+                game.aiPanicMode = false;
+            }
+            
+            // Add human-like reaction delay (3-8 frames)
+            let reactionDelay = 3 + Math.random() * 5;
+            
+            // Make mistakes occasionally
+            if (Math.random() < game.aiMistakeChance) {
+                shouldJump = !shouldJump; // Make wrong decision
+                console.log("AI made a mistake!");
+            }
+            
+            // Increase mistake chance as score gets higher (pressure)
+            game.aiMistakeChance = 0.02 + (game.score * 0.001);
+            
+            // Only make decision if enough time has passed since last decision
+            if (shouldJump && game.aiReactionTime > reactionDelay && 
+                Date.now() - game.aiLastDecision > 100) { // Minimum 100ms between jumps
+                
+                // Execute jump
+                game.velocityY = -6;
+                game.isFlapping = true;
+                game.flapAnimation = 0;
+                playSound(sfxWing);
+                
+                game.aiLastDecision = Date.now();
+                game.aiReactionTime = 0;
+            }
+        }
+    }
+    
+    // Emergency jump if bird is falling too fast near ground
+    if (game.bird.y > boardHeight - 150 && game.velocityY > 3) {
+        if (Math.random() < 0.8) { // 80% chance to save itself
+            game.velocityY = -6;
+            game.isFlapping = true;
+            game.flapAnimation = 0;
+            playSound(sfxWing);
+            game.aiLastDecision = Date.now();
+        }
+    }
+}
+
+// Console command to toggle AI
+function toggleAI(player = 'both') {
+    if (player === 'both' || player === 1) {
+        aiEnabled.game1 = !aiEnabled.game1;
+        console.log(`AI for Player 1 (left): ${aiEnabled.game1 ? 'ENABLED' : 'DISABLED'}`);
+    }
+    
+    if (player === 'both' || player === 2) {
+        aiEnabled.game2 = !aiEnabled.game2;
+        console.log(`AI for Player 2 (right): ${aiEnabled.game2 ? 'ENABLED' : 'DISABLED'}`);
+    }
+    
+    if (player !== 1 && player !== 2 && player !== 'both') {
+        console.log('Usage: toggleAI() or toggleAI(1) or toggleAI(2)');
+        console.log('Current status:');
+        console.log(`Player 1 AI: ${aiEnabled.game1 ? 'ENABLED' : 'DISABLED'}`);
+        console.log(`Player 2 AI: ${aiEnabled.game2 ? 'ENABLED' : 'DISABLED'}`);
+    }
+}
+
+// Make toggleAI available globally
+window.toggleAI = toggleAI;
