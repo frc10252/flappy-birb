@@ -746,7 +746,7 @@ function triggerRianbaldEasterEgg(game, triggerPipe) {
     rianbaldAnimation[gameKey].x = boardWidth * 0.75; // 75% to the right
     rianbaldAnimation[gameKey].y = boardHeight / 2; // Center vertically
 
-    console.log("Rianbald easter egg triggered at score:", Math.floor(game.score));
+    console.log("rian triggered at score:", Math.floor(game.score));
 }
 
 function drawRianbaldEasterEgg(game, gameKey) {
