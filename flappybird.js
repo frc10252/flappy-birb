@@ -34,6 +34,28 @@ function updateHighScore(score) {
     return false;
 }
 
+function drawScrollingBackground(game) {
+    if (backgroundImg && backgroundImg.complete) {
+        // Update background positions
+        if (!game.gameOver) {
+            backgroundX1 -= backgroundSpeed;
+            backgroundX2 -= backgroundSpeed;
+
+            // Reset positions when they go off screen
+            if (backgroundX1 <= -backgroundImg.width) {
+                backgroundX1 = backgroundX2 + backgroundImg.width;
+            }
+            if (backgroundX2 <= -backgroundImg.width) {
+                backgroundX2 = backgroundX1 + backgroundImg.width;
+            }
+        }
+
+        // Draw both background images to create seamless loop
+        game.context.drawImage(backgroundImg, backgroundX1, 0, backgroundImg.width, game.board.height);
+        game.context.drawImage(backgroundImg, backgroundX2, 0, backgroundImg.width, game.board.height);
+    }
+}
+
 // Countdown system
 let countdownTimer = 0;
 let countdownValue = 3;
@@ -60,6 +82,12 @@ let sfxWing;
 let sfxHit;
 let sfxDie;
 let sfxPoint;
+
+//scrolling background
+let backgroundImg;
+let backgroundX1 = 0;
+let backgroundX2 = 0;
+let backgroundSpeed = 0.15;
 
 //easter egg
 let rianbaldImg;
@@ -214,6 +242,15 @@ window.onload = function () {
     sfxPoint = new Audio();
     sfxPoint.src = "./sfx_point.wav";
 
+    //load scrolling background image
+    backgroundImg = new Image();
+    backgroundImg.src = "./anotherbg.png";
+
+    // Initialize background positions
+    backgroundImg.onload = function () {
+        backgroundX2 = backgroundImg.width;
+    };
+
     //load easter egg image
     rianbaldImg = new Image();
     rianbaldImg.src = "./rianbald.png";
@@ -236,7 +273,7 @@ function setupResponsiveCanvas() {
     const totalWidth = boardWidth * 2 + 20; // 20px gap between canvas
     const scaleX = containerWidth / totalWidth;
     const scaleY = containerHeight / boardHeight;
-    canvasScale = Math.min(scaleX, scaleY, 1); //scale limitation
+    canvasScale = Math.min(scaleX, scaleY, 1.2); // Increased max scale from 1 to 1.2 for bigger display
 
     //scaling to the container we are in
     container.style.transform = `scale(${canvasScale})`;
@@ -253,6 +290,13 @@ function setupMenuButtons() {
 
 function showLeaderboard() {
     gameState = 'LEADERBOARD';
+
+    // Update leaderboard display with current high scores
+    document.getElementById('score-single').textContent = highScores.SINGLE;
+    document.getElementById('score-two-player').textContent = highScores.TWO_PLAYER;
+    document.getElementById('score-ai-vs-ai').textContent = highScores.AI_VS_AI;
+    document.getElementById('score-player-vs-ai').textContent = highScores.PLAYER_VS_AI;
+
     document.getElementById('title-screen').style.display = 'none';
     document.getElementById('leaderboard-screen').style.display = 'flex';
 }
@@ -270,11 +314,11 @@ function startCountdown(mode) {
     gameState = 'COUNTDOWN';
     countdownValue = 3;
     countdownTimer = 0;
-    
+
     // Hide title screen and show countdown
     document.getElementById('title-screen').style.display = 'none';
     document.getElementById('countdown-screen').style.display = 'flex';
-    
+
     // Set countdown mode text
     const modeNames = {
         'SINGLE': 'SINGLE PLAYER',
@@ -284,20 +328,20 @@ function startCountdown(mode) {
     };
     document.getElementById('countdown-mode').textContent = modeNames[mode];
     document.getElementById('countdown-number').textContent = countdownValue;
-    
+
     // Play countdown sound
     playSound(sfxWing);
 }
 
 function startGame(mode) {
     gameState = 'PLAYING';
-    
+
     // Hide countdown screen and show game
     document.getElementById('countdown-screen').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
-    
+
     // Configure AI based on game mode
-    switch(mode) {
+    switch (mode) {
         case 'SINGLE':
             aiEnabled.game1 = false;
             aiEnabled.game2 = false;
@@ -320,7 +364,7 @@ function startGame(mode) {
             document.getElementById('board2').style.display = 'block';
             break;
     }
-    
+
     // Initialize games
     initializeGames();
 }
@@ -329,7 +373,7 @@ function initializeGames() {
     // Reset both games
     resetGame(game1);
     resetGame(game2);
-    
+
     // Draw initial birds
     if (birdAnimFrames[0] && birdAnimFrames[0].complete) {
         const initialFrame = birdAnimFrames[0];
@@ -338,7 +382,7 @@ function initializeGames() {
             game2.context.drawImage(initialFrame, game2.bird.x, game2.bird.y, game2.bird.width, game2.bird.height);
         }
     }
-    
+
     // Start pipe intervals
     game1.pipeInterval = setInterval(() => placePipes(game1), currentPipeInterval);
     if (gameMode !== 'SINGLE') {
@@ -429,7 +473,7 @@ function drawBird(game) {
 
 function update() {
     requestAnimationFrame(update);
-    
+
     if (gameState === 'COUNTDOWN') {
         updateCountdown();
     } else if (gameState === 'PLAYING') {
@@ -442,11 +486,11 @@ function update() {
 
 function updateCountdown() {
     countdownTimer++;
-    
+
     // Update every 60 frames (1 second at 60fps)
     if (countdownTimer % 60 === 0) {
         countdownValue--;
-        
+
         if (countdownValue > 0) {
             document.getElementById('countdown-number').textContent = countdownValue;
             // Trigger animation by removing and re-adding class
@@ -461,7 +505,7 @@ function updateCountdown() {
             document.getElementById('countdown-number').textContent = 'GO!';
             document.getElementById('countdown-text').textContent = 'FLY!';
             playSound(sfxPoint);
-            
+
             setTimeout(() => {
                 startGame(gameMode);
             }, 500);
@@ -471,6 +515,9 @@ function updateCountdown() {
 
 function updateGame(game) {
     game.context.clearRect(0, 0, game.board.width, game.board.height);
+
+    // Draw scrolling background
+    drawScrollingBackground(game);
 
     // AI decision making
     let gameKey = game === game1 ? 'game1' : 'game2';
@@ -569,29 +616,36 @@ function updateGame(game) {
         game.pipeArray.shift(); //removes first element from the array
     }
 
-    //score - nice styling with high score display
+    //score - nice styling with real-time high score display
     if (!game.gameOver || game.deathTimer <= 60) {
         const currentScore = Math.floor(game.score);
-        const currentHighScore = highScores[gameMode];
-        
+        let currentHighScore = highScores[gameMode];
+
+        // Update high score in real time if current score is higher
+        if (currentScore > currentHighScore) {
+            currentHighScore = currentScore;
+            highScores[gameMode] = currentScore;
+            saveHighScores();
+        }
+
         // Current Score shadow
         game.context.fillStyle = "rgba(0, 0, 0, 0.7)";
         game.context.font = "bold 36px 'Courier New', monospace";
         game.context.fillText(currentScore, 12, 52);
 
         // Main score text
-        game.context.fillStyle = currentScore > currentHighScore ? "#FF6B6B" : "#FFD93D";
+        game.context.fillStyle = currentScore >= currentHighScore ? "#FF6B6B" : "#FFD93D";
         game.context.fillText(currentScore, 10, 50);
-        
+
         // High Score display (smaller, top right)
         game.context.fillStyle = "rgba(0, 0, 0, 0.7)";
         game.context.font = "bold 18px 'Courier New', monospace";
         game.context.textAlign = "right";
         game.context.fillText(`BEST: ${currentHighScore}`, game.board.width - 8, 32);
-        
+
         game.context.fillStyle = "#4ECDC4";
         game.context.fillText(`BEST: ${currentHighScore}`, game.board.width - 10, 30);
-        
+
         // Reset text alignment
         game.context.textAlign = "start";
     }
@@ -651,7 +705,7 @@ function handleInput(e) {
     if (gameState === 'PLAYING') {
         moveBird(e);
     }
-    
+
     // ESC key to return to menu
     if (e.code === "Escape") {
         if (gameState === 'PLAYING') {
@@ -704,7 +758,7 @@ function moveBird(e) {
 
 function returnToMenu() {
     gameState = 'TITLE';
-    
+
     // Clear intervals
     if (game1.pipeInterval) {
         clearInterval(game1.pipeInterval);
@@ -714,13 +768,13 @@ function returnToMenu() {
         clearInterval(game2.pipeInterval);
         game2.pipeInterval = null;
     }
-    
+
     // Show title screen and hide other screens
     document.getElementById('title-screen').style.display = 'flex';
     document.getElementById('countdown-screen').style.display = 'none';
     document.getElementById('game-container').style.display = 'none';
     document.getElementById('board2').style.display = 'block'; // Reset for menu
-    
+
     // Reset games
     resetGame(game1);
     resetGame(game2);
@@ -779,12 +833,12 @@ function drawGameOverScreen(game) {
     const scoreY = panelY + 90;
     const currentScore = Math.floor(game.score);
     const isNewHighScore = currentScore > highScores[gameMode];
-    
+
     // Check and update high score
     if (game.gameOverScreenTimer === 61) { // Only check once when screen first appears
         updateHighScore(currentScore);
     }
-    
+
     game.context.fillStyle = "rgba(255, 217, 61, 0.2)";
     game.context.fillRect(game.board.width / 2 - 90, scoreY - 20, 180, 50);
 
@@ -799,7 +853,7 @@ function drawGameOverScreen(game) {
 
     game.context.fillStyle = isNewHighScore ? "#FF6B6B" : "#FFD93D";
     game.context.fillText(`SCORE: ${currentScore}`, game.board.width / 2, scoreY);
-    
+
     // High Score
     game.context.fillStyle = "#333";
     game.context.font = "bold 14px 'Courier New', monospace";
@@ -807,7 +861,7 @@ function drawGameOverScreen(game) {
 
     game.context.fillStyle = "#4ECDC4";
     game.context.fillText(`BEST: ${highScores[gameMode]}`, game.board.width / 2, scoreY + 20);
-    
+
     // New high score indicator
     if (isNewHighScore && game.gameOverScreenTimer % 30 < 15) {
         game.context.fillStyle = "#FF6B6B";
@@ -818,7 +872,7 @@ function drawGameOverScreen(game) {
     // Instructions
     const instructY = panelY + 160;
     const instructY2 = panelY + 180;
-    
+
     if (gameMode === 'SINGLE') {
         if (game1.gameOver && game1.canRestart) {
             game.context.fillStyle = "#4ECDC4";
@@ -839,7 +893,7 @@ function drawGameOverScreen(game) {
             game.context.fillText("Waiting for other player...", game.board.width / 2, instructY);
         }
     }
-    
+
     // ESC to menu instruction
     game.context.fillStyle = "#888";
     game.context.font = "12px 'Courier New', monospace";
@@ -886,6 +940,12 @@ function resetGame(game) {
     game.canRestart = false;
     game.lastDifficultyUpdate = 0;
 
+    // Reset background positions
+    backgroundX1 = 0;
+    if (backgroundImg && backgroundImg.complete) {
+        backgroundX2 = backgroundImg.width;
+    }
+
     // Reset animation states
     game.animationFrame = 0;
     game.animationTimer = 0;
@@ -926,24 +986,82 @@ function playSound(audio) {
     }
 }
 
-// PERFECT AI - Always stays in the exact middle of pipe gaps
+// ADVANCED AI - Handles close gaps and height differences intelligently
 function updateAI(game) {
-    // Find the next pipe gap the bird needs to navigate through
-    let nextGap = findNextPipeGap(game);
     let birdCenter = game.bird.y + game.bird.height / 2;
+    let birdTop = game.bird.y;
+    let birdBottom = game.bird.y + game.bird.height;
 
-    if (nextGap) {
-        // Calculate the exact middle of the gap
-        let gapMiddle = nextGap.top + (nextGap.bottom - nextGap.top) / 2;
+    // Find current and next gaps
+    let currentGap = findNextPipeGap(game);
+    let nextGap = findSecondPipeGap(game);
 
-        // Perfect positioning: jump if bird center is below the gap middle
-        if (birdCenter > gapMiddle) {
+    if (currentGap) {
+        let gapMiddle = currentGap.top + (currentGap.bottom - currentGap.top) / 2;
+        let gapHeight = currentGap.bottom - currentGap.top;
+        let distanceToGap = currentGap.distance;
+
+        // Calculate bird's trajectory
+        let futureY = predictBirdPosition(game, distanceToGap);
+        let futureCenter = futureY + game.bird.height / 2;
+
+        // Safety margins based on gap size and distance
+        let safetyMargin = Math.max(game.bird.height * 0.8, gapHeight * 0.15);
+        let upperSafeZone = currentGap.top + safetyMargin;
+        let lowerSafeZone = currentGap.bottom - safetyMargin;
+
+        // If gap is very close, prioritize immediate safety
+        if (distanceToGap < 80) {
+            // Emergency avoidance - jump if too low or about to hit bottom
+            if (futureCenter > lowerSafeZone || birdBottom > currentGap.bottom - 20) {
+                executeJump(game);
+                return;
+            }
+            // Don't jump if we're safely in the upper part of the gap
+            if (futureCenter < upperSafeZone) {
+                return;
+            }
+        }
+
+        // Look ahead strategy for close gaps with height differences
+        if (nextGap && distanceToGap < 150) {
+            let nextGapMiddle = nextGap.top + (nextGap.bottom - nextGap.top) / 2;
+            let heightDifference = Math.abs(gapMiddle - nextGapMiddle);
+
+            // If there's a significant height difference, adjust target position
+            if (heightDifference > gapHeight * 0.5) {
+                // Bias toward the direction we need to go for the next gap
+                if (nextGapMiddle < gapMiddle) {
+                    // Next gap is higher, stay in upper part of current gap
+                    gapMiddle = currentGap.top + gapHeight * 0.3;
+                } else {
+                    // Next gap is lower, stay in lower part of current gap
+                    gapMiddle = currentGap.top + gapHeight * 0.7;
+                }
+            }
+        }
+
+        // Advanced jump decision with velocity consideration
+        let jumpThreshold = gapMiddle;
+
+        // Adjust threshold based on current velocity
+        if (game.velocityY > 0) {
+            // Falling - jump earlier
+            jumpThreshold += game.velocityY * 3;
+        } else {
+            // Rising - can wait a bit longer
+            jumpThreshold -= Math.abs(game.velocityY) * 2;
+        }
+
+        // Execute jump with smart timing
+        if (birdCenter > jumpThreshold) {
             executeJump(game);
         }
+
     } else {
-        // No pipes visible - stay at screen center
+        // No pipes visible - maintain center position
         let screenCenter = boardHeight / 2;
-        if (birdCenter > screenCenter) {
+        if (birdCenter > screenCenter + 20) {
             executeJump(game);
         }
     }
@@ -988,6 +1106,56 @@ function findNextPipeGap(game) {
     }
 
     return nextGap;
+}
+
+// Find the second closest pipe gap for look-ahead planning
+function findSecondPipeGap(game) {
+    let pipeGroups = {};
+    let distances = [];
+
+    for (let pipe of game.pipeArray) {
+        if (pipe.x + pipe.width > game.bird.x) {
+            if (!pipeGroups[pipe.x]) {
+                pipeGroups[pipe.x] = [];
+                distances.push(parseInt(pipe.x) - game.bird.x);
+            }
+            pipeGroups[pipe.x].push(pipe);
+        }
+    }
+
+    // Sort distances and get second closest
+    distances.sort((a, b) => a - b);
+    if (distances.length < 2) return null;
+
+    let secondClosestX = game.bird.x + distances[1];
+    let pipes = pipeGroups[secondClosestX];
+
+    if (pipes && pipes.length === 2) {
+        let topPipe = pipes[0].y < pipes[1].y ? pipes[0] : pipes[1];
+        let bottomPipe = pipes[0].y > pipes[1].y ? pipes[0] : pipes[1];
+
+        return {
+            x: secondClosestX,
+            top: topPipe.y + topPipe.height,
+            bottom: bottomPipe.y,
+            distance: distances[1]
+        };
+    }
+
+    return null;
+}
+
+// Predict where the bird will be after a certain distance/time
+function predictBirdPosition(game, distance) {
+    // Estimate frames based on pipe speed
+    let frames = Math.abs(distance / velocityX);
+
+    // Calculate future Y position considering gravity
+    let futureVelocityY = game.velocityY + (gravity * frames);
+    let futureY = game.bird.y + (game.velocityY * frames) + (0.5 * gravity * frames * frames);
+
+    // Clamp to screen bounds
+    return Math.max(0, Math.min(futureY, boardHeight - game.bird.height));
 }
 
 // Execute perfect jump with no delays
