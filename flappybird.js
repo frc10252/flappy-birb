@@ -989,79 +989,19 @@ function playSound(audio) {
 // ADVANCED AI - Handles close gaps and height differences intelligently
 function updateAI(game) {
     let birdCenter = game.bird.y + game.bird.height / 2;
-    let birdTop = game.bird.y;
-    let birdBottom = game.bird.y + game.bird.height;
+    let nextGap = findNextPipeGap(game);
 
-    // Find current and next gaps
-    let currentGap = findNextPipeGap(game);
-    let nextGap = findSecondPipeGap(game);
+    if (nextGap) {
+        let gapMiddle = nextGap.top + (nextGap.bottom - nextGap.top) / 2;
 
-    if (currentGap) {
-        let gapMiddle = currentGap.top + (currentGap.bottom - currentGap.top) / 2;
-        let gapHeight = currentGap.bottom - currentGap.top;
-        let distanceToGap = currentGap.distance;
-
-        // Calculate bird's trajectory
-        let futureY = predictBirdPosition(game, distanceToGap);
-        let futureCenter = futureY + game.bird.height / 2;
-
-        // Safety margins based on gap size and distance
-        let safetyMargin = Math.max(game.bird.height * 0.8, gapHeight * 0.15);
-        let upperSafeZone = currentGap.top + safetyMargin;
-        let lowerSafeZone = currentGap.bottom - safetyMargin;
-
-        // If gap is very close, prioritize immediate safety
-        if (distanceToGap < 80) {
-            // Emergency avoidance - jump if too low or about to hit bottom
-            if (futureCenter > lowerSafeZone || birdBottom > currentGap.bottom - 20) {
-                executeJump(game);
-                return;
-            }
-            // Don't jump if we're safely in the upper part of the gap
-            if (futureCenter < upperSafeZone) {
-                return;
-            }
-        }
-
-        // Look ahead strategy for close gaps with height differences
-        if (nextGap && distanceToGap < 150) {
-            let nextGapMiddle = nextGap.top + (nextGap.bottom - nextGap.top) / 2;
-            let heightDifference = Math.abs(gapMiddle - nextGapMiddle);
-
-            // If there's a significant height difference, adjust target position
-            if (heightDifference > gapHeight * 0.5) {
-                // Bias toward the direction we need to go for the next gap
-                if (nextGapMiddle < gapMiddle) {
-                    // Next gap is higher, stay in upper part of current gap
-                    gapMiddle = currentGap.top + gapHeight * 0.3;
-                } else {
-                    // Next gap is lower, stay in lower part of current gap
-                    gapMiddle = currentGap.top + gapHeight * 0.7;
-                }
-            }
-        }
-
-        // Advanced jump decision with velocity consideration
-        let jumpThreshold = gapMiddle;
-
-        // Adjust threshold based on current velocity
-        if (game.velocityY > 0) {
-            // Falling - jump earlier
-            jumpThreshold += game.velocityY * 3;
-        } else {
-            // Rising - can wait a bit longer
-            jumpThreshold -= Math.abs(game.velocityY) * 2;
-        }
-
-        // Execute jump with smart timing
-        if (birdCenter > jumpThreshold) {
+        // Simple but effective: jump if bird center is below gap middle
+        if (birdCenter > gapMiddle) {
             executeJump(game);
         }
-
     } else {
-        // No pipes visible - maintain center position
+        // No pipes visible - stay at screen center
         let screenCenter = boardHeight / 2;
-        if (birdCenter > screenCenter + 20) {
+        if (birdCenter > screenCenter) {
             executeJump(game);
         }
     }
@@ -1108,55 +1048,7 @@ function findNextPipeGap(game) {
     return nextGap;
 }
 
-// Find the second closest pipe gap for look-ahead planning
-function findSecondPipeGap(game) {
-    let pipeGroups = {};
-    let distances = [];
 
-    for (let pipe of game.pipeArray) {
-        if (pipe.x + pipe.width > game.bird.x) {
-            if (!pipeGroups[pipe.x]) {
-                pipeGroups[pipe.x] = [];
-                distances.push(parseInt(pipe.x) - game.bird.x);
-            }
-            pipeGroups[pipe.x].push(pipe);
-        }
-    }
-
-    // Sort distances and get second closest
-    distances.sort((a, b) => a - b);
-    if (distances.length < 2) return null;
-
-    let secondClosestX = game.bird.x + distances[1];
-    let pipes = pipeGroups[secondClosestX];
-
-    if (pipes && pipes.length === 2) {
-        let topPipe = pipes[0].y < pipes[1].y ? pipes[0] : pipes[1];
-        let bottomPipe = pipes[0].y > pipes[1].y ? pipes[0] : pipes[1];
-
-        return {
-            x: secondClosestX,
-            top: topPipe.y + topPipe.height,
-            bottom: bottomPipe.y,
-            distance: distances[1]
-        };
-    }
-
-    return null;
-}
-
-// Predict where the bird will be after a certain distance/time
-function predictBirdPosition(game, distance) {
-    // Estimate frames based on pipe speed
-    let frames = Math.abs(distance / velocityX);
-
-    // Calculate future Y position considering gravity
-    let futureVelocityY = game.velocityY + (gravity * frames);
-    let futureY = game.bird.y + (game.velocityY * frames) + (0.5 * gravity * frames * frames);
-
-    // Clamp to screen bounds
-    return Math.max(0, Math.min(futureY, boardHeight - game.bird.height));
-}
 
 // Execute perfect jump with no delays
 function executeJump(game) {
