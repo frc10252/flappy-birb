@@ -29,6 +29,9 @@
                 <button class="menu-btn" id="player-vs-ai-btn" data-mode="PLAYER_VS_AI">
                     PLAYER vs AI
                 </button>
+                <button class="menu-btn" id="leaderboard-btn">
+                    LEADERBOARD
+                </button>
             </div>
 
             <div id="controls-info">
@@ -54,6 +57,32 @@
             <h2 id="countdown-mode"></h2>
             <div id="countdown-number">3</div>
             <div id="countdown-text">GET READY!</div>
+        </div>
+    </div>
+
+    <!-- Leaderboard Screen -->
+    <div id="leaderboard-screen" style="display: none;">
+        <div id="leaderboard-content">
+            <h1 id="leaderboard-title">HIGH SCORES</h1>
+            <div id="leaderboard-list">
+                <div class="score-entry">
+                    <span class="mode-name">SINGLE PLAYER</span>
+                    <span class="score-value" id="score-single">0</span>
+                </div>
+                <div class="score-entry">
+                    <span class="mode-name">TWO PLAYER</span>
+                    <span class="score-value" id="score-two-player">0</span>
+                </div>
+                <div class="score-entry">
+                    <span class="mode-name">AI vs AI</span>
+                    <span class="score-value" id="score-ai-vs-ai">0</span>
+                </div>
+                <div class="score-entry">
+                    <span class="mode-name">PLAYER vs AI</span>
+                    <span class="score-value" id="score-player-vs-ai">0</span>
+                </div>
+            </div>
+            <button class="menu-btn" onclick="hideLeaderboard()">BACK TO MENU</button>
         </div>
     </div>
 

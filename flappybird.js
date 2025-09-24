@@ -1,20 +1,51 @@
 
 // Game state management
-let gameState = 'TITLE'; // 'TITLE', 'COUNTDOWN', 'PLAYING'
+let gameState = 'TITLE'; // 'TITLE', 'COUNTDOWN', 'PLAYING', 'LEADERBOARD'
 let gameMode = 'SINGLE'; // 'SINGLE', 'TWO_PLAYER', 'AI_VS_AI', 'PLAYER_VS_AI'
+
+// High Score System
+let highScores = {
+    SINGLE: 0,
+    TWO_PLAYER: 0,
+    AI_VS_AI: 0,
+    PLAYER_VS_AI: 0
+};
+
+// Load high scores from localStorage
+function loadHighScores() {
+    const saved = localStorage.getItem('flappyBirdHighScores');
+    if (saved) {
+        highScores = { ...highScores, ...JSON.parse(saved) };
+    }
+}
+
+// Save high scores to localStorage
+function saveHighScores() {
+    localStorage.setItem('flappyBirdHighScores', JSON.stringify(highScores));
+}
+
+// Update high score for current mode
+function updateHighScore(score) {
+    if (score > highScores[gameMode]) {
+        highScores[gameMode] = score;
+        saveHighScores();
+        return true; // New high score!
+    }
+    return false;
+}
 
 // Countdown system
 let countdownTimer = 0;
 let countdownValue = 3;
 
-//board - responsive sizing
-let boardWidth = 360;
-let boardHeight = 640;
+//board - responsive sizing (scaled up for bigger game)
+let boardWidth = 480; // Increased from 360
+let boardHeight = 800; // Increased from 640
 let canvasScale = 1;
 
-//bird
-let birdWidth = 34; //width/height ratio = 408/228 = 17/12
-let birdHeight = 24;
+//bird (scaled up)
+let birdWidth = 45; //scaled up from 34
+let birdHeight = 32; //scaled up from 24
 let birdX = boardWidth / 8;
 let birdY = boardHeight / 2;
 let birdImg;
@@ -41,9 +72,9 @@ let rianbaldAnimation = {
     game2: { active: false, timer: 0, y: 0, targetY: 0 }
 };
 
-//pipes
-let pipeWidth = 64; //width/height ratio = 384/3072 = 1/8
-let pipeHeight = 512;
+//pipes (scaled up)
+let pipeWidth = 85; //scaled up from 64
+let pipeHeight = 680; //scaled up from 512
 let pipeX = boardWidth;
 let pipeY = 0;
 
@@ -137,6 +168,7 @@ let game2 = {
 };
 
 window.onload = function () {
+    loadHighScores(); // Load saved high scores
     setupResponsiveCanvas();
     setupMenuButtons();
 
@@ -216,6 +248,19 @@ function setupMenuButtons() {
     document.getElementById('two-player-btn').addEventListener('click', () => startCountdown('TWO_PLAYER'));
     document.getElementById('ai-vs-ai-btn').addEventListener('click', () => startCountdown('AI_VS_AI'));
     document.getElementById('player-vs-ai-btn').addEventListener('click', () => startCountdown('PLAYER_VS_AI'));
+    document.getElementById('leaderboard-btn').addEventListener('click', showLeaderboard);
+}
+
+function showLeaderboard() {
+    gameState = 'LEADERBOARD';
+    document.getElementById('title-screen').style.display = 'none';
+    document.getElementById('leaderboard-screen').style.display = 'flex';
+}
+
+function hideLeaderboard() {
+    gameState = 'TITLE';
+    document.getElementById('leaderboard-screen').style.display = 'none';
+    document.getElementById('title-screen').style.display = 'flex';
 }
 
 
@@ -524,16 +569,31 @@ function updateGame(game) {
         game.pipeArray.shift(); //removes first element from the array
     }
 
-    //score - nice styling without box
+    //score - nice styling with high score display
     if (!game.gameOver || game.deathTimer <= 60) {
-        // Score shadow
+        const currentScore = Math.floor(game.score);
+        const currentHighScore = highScores[gameMode];
+        
+        // Current Score shadow
         game.context.fillStyle = "rgba(0, 0, 0, 0.7)";
-        game.context.font = "bold 32px 'Courier New', monospace";
-        game.context.fillText(Math.floor(game.score), 12, 42);
+        game.context.font = "bold 36px 'Courier New', monospace";
+        game.context.fillText(currentScore, 12, 52);
 
         // Main score text
-        game.context.fillStyle = "#FFD93D";
-        game.context.fillText(Math.floor(game.score), 10, 40);
+        game.context.fillStyle = currentScore > currentHighScore ? "#FF6B6B" : "#FFD93D";
+        game.context.fillText(currentScore, 10, 50);
+        
+        // High Score display (smaller, top right)
+        game.context.fillStyle = "rgba(0, 0, 0, 0.7)";
+        game.context.font = "bold 18px 'Courier New', monospace";
+        game.context.textAlign = "right";
+        game.context.fillText(`BEST: ${currentHighScore}`, game.board.width - 8, 32);
+        
+        game.context.fillStyle = "#4ECDC4";
+        game.context.fillText(`BEST: ${currentHighScore}`, game.board.width - 10, 30);
+        
+        // Reset text alignment
+        game.context.textAlign = "start";
     }
 
     // Enhanced game over screen
@@ -593,8 +653,12 @@ function handleInput(e) {
     }
     
     // ESC key to return to menu
-    if (e.code === "Escape" && gameState === 'PLAYING') {
-        returnToMenu();
+    if (e.code === "Escape") {
+        if (gameState === 'PLAYING') {
+            returnToMenu();
+        } else if (gameState === 'LEADERBOARD') {
+            hideLeaderboard();
+        }
     }
 }
 
@@ -712,25 +776,48 @@ function drawGameOverScreen(game) {
     game.context.fillText("GAME OVER", game.board.width / 2, textY);
 
     // Score display
-    const scoreY = panelY + 100;
+    const scoreY = panelY + 90;
+    const currentScore = Math.floor(game.score);
+    const isNewHighScore = currentScore > highScores[gameMode];
+    
+    // Check and update high score
+    if (game.gameOverScreenTimer === 61) { // Only check once when screen first appears
+        updateHighScore(currentScore);
+    }
+    
     game.context.fillStyle = "rgba(255, 217, 61, 0.2)";
-    game.context.fillRect(game.board.width / 2 - 70, scoreY - 20, 140, 30);
+    game.context.fillRect(game.board.width / 2 - 90, scoreY - 20, 180, 50);
 
     game.context.strokeStyle = "#FFD93D";
     game.context.lineWidth = 1;
-    game.context.strokeRect(game.board.width / 2 - 70, scoreY - 20, 140, 30);
+    game.context.strokeRect(game.board.width / 2 - 90, scoreY - 20, 180, 50);
 
-    // Score text
+    // Current Score
     game.context.fillStyle = "#333";
-    game.context.font = "bold 20px 'Courier New', monospace";
-    game.context.fillText(`SCORE: ${Math.floor(game.score)}`, game.board.width / 2 + 1, scoreY + 1);
+    game.context.font = "bold 16px 'Courier New', monospace";
+    game.context.fillText(`SCORE: ${currentScore}`, game.board.width / 2 + 1, scoreY + 1);
 
-    game.context.fillStyle = "#FFD93D";
-    game.context.fillText(`SCORE: ${Math.floor(game.score)}`, game.board.width / 2, scoreY);
+    game.context.fillStyle = isNewHighScore ? "#FF6B6B" : "#FFD93D";
+    game.context.fillText(`SCORE: ${currentScore}`, game.board.width / 2, scoreY);
+    
+    // High Score
+    game.context.fillStyle = "#333";
+    game.context.font = "bold 14px 'Courier New', monospace";
+    game.context.fillText(`BEST: ${highScores[gameMode]}`, game.board.width / 2 + 1, scoreY + 21);
+
+    game.context.fillStyle = "#4ECDC4";
+    game.context.fillText(`BEST: ${highScores[gameMode]}`, game.board.width / 2, scoreY + 20);
+    
+    // New high score indicator
+    if (isNewHighScore && game.gameOverScreenTimer % 30 < 15) {
+        game.context.fillStyle = "#FF6B6B";
+        game.context.font = "bold 12px 'Courier New', monospace";
+        game.context.fillText("NEW HIGH SCORE!", game.board.width / 2, scoreY - 30);
+    }
 
     // Instructions
-    const instructY = panelY + 150;
-    const instructY2 = panelY + 170;
+    const instructY = panelY + 160;
+    const instructY2 = panelY + 180;
     
     if (gameMode === 'SINGLE') {
         if (game1.gameOver && game1.canRestart) {
