@@ -1,4 +1,12 @@
 
+// Game state management
+let gameState = 'TITLE'; // 'TITLE', 'COUNTDOWN', 'PLAYING'
+let gameMode = 'SINGLE'; // 'SINGLE', 'TWO_PLAYER', 'AI_VS_AI', 'PLAYER_VS_AI'
+
+// Countdown system
+let countdownTimer = 0;
+let countdownValue = 3;
+
 //board - responsive sizing
 let boardWidth = 360;
 let boardHeight = 640;
@@ -130,6 +138,7 @@ let game2 = {
 
 window.onload = function () {
     setupResponsiveCanvas();
+    setupMenuButtons();
 
     //left side game
     game1.board = document.getElementById("board1");
@@ -152,13 +161,6 @@ window.onload = function () {
         let frame = new Image();
         frame.src = `./flappybird${i}.png`;
         birdAnimFrames.push(frame);
-    }
-
-    birdImg.onload = function () {
-        // Use first animation frame for initial draw if available, otherwise use original
-        const initialFrame = birdAnimFrames[0] || birdImg;
-        game1.context.drawImage(initialFrame, game1.bird.x, game1.bird.y, game1.bird.width, game1.bird.height);
-        game2.context.drawImage(initialFrame, game2.bird.x, game2.bird.y, game2.bird.width, game2.bird.height);
     }
 
     topPipeImg = new Image();
@@ -184,17 +186,12 @@ window.onload = function () {
     rianbaldImg = new Image();
     rianbaldImg.src = "./rianbald.png";
 
+
+
+    // Only start the game loop, don't start pipe intervals yet
     requestAnimationFrame(update);
 
-    // Dynamic pipe intervals that will be updated based on difficulty
-    let pipeInterval1 = setInterval(() => placePipes(game1), currentPipeInterval);
-    let pipeInterval2 = setInterval(() => placePipes(game2), currentPipeInterval);
-
-    // Store intervals for later clearing and recreation
-    game1.pipeInterval = pipeInterval1;
-    game2.pipeInterval = pipeInterval2;
-
-    document.addEventListener("keydown", moveBird);
+    document.addEventListener("keydown", handleInput);
     window.addEventListener("resize", setupResponsiveCanvas);
 }
 
@@ -212,6 +209,96 @@ function setupResponsiveCanvas() {
     //scaling to the container we are in
     container.style.transform = `scale(${canvasScale})`;
     container.style.transformOrigin = 'center center';
+}
+
+function setupMenuButtons() {
+    document.getElementById('single-player-btn').addEventListener('click', () => startCountdown('SINGLE'));
+    document.getElementById('two-player-btn').addEventListener('click', () => startCountdown('TWO_PLAYER'));
+    document.getElementById('ai-vs-ai-btn').addEventListener('click', () => startCountdown('AI_VS_AI'));
+    document.getElementById('player-vs-ai-btn').addEventListener('click', () => startCountdown('PLAYER_VS_AI'));
+}
+
+
+
+function startCountdown(mode) {
+    gameMode = mode;
+    gameState = 'COUNTDOWN';
+    countdownValue = 3;
+    countdownTimer = 0;
+    
+    // Hide title screen and show countdown
+    document.getElementById('title-screen').style.display = 'none';
+    document.getElementById('countdown-screen').style.display = 'flex';
+    
+    // Set countdown mode text
+    const modeNames = {
+        'SINGLE': 'SINGLE PLAYER',
+        'TWO_PLAYER': 'TWO PLAYER',
+        'AI_VS_AI': 'AI vs AI',
+        'PLAYER_VS_AI': 'PLAYER vs AI'
+    };
+    document.getElementById('countdown-mode').textContent = modeNames[mode];
+    document.getElementById('countdown-number').textContent = countdownValue;
+    
+    // Play countdown sound
+    playSound(sfxWing);
+}
+
+function startGame(mode) {
+    gameState = 'PLAYING';
+    
+    // Hide countdown screen and show game
+    document.getElementById('countdown-screen').style.display = 'none';
+    document.getElementById('game-container').style.display = 'flex';
+    
+    // Configure AI based on game mode
+    switch(mode) {
+        case 'SINGLE':
+            aiEnabled.game1 = false;
+            aiEnabled.game2 = false;
+            // Hide second canvas for single player
+            document.getElementById('board2').style.display = 'none';
+            break;
+        case 'TWO_PLAYER':
+            aiEnabled.game1 = false;
+            aiEnabled.game2 = false;
+            document.getElementById('board2').style.display = 'block';
+            break;
+        case 'AI_VS_AI':
+            aiEnabled.game1 = true;
+            aiEnabled.game2 = true;
+            document.getElementById('board2').style.display = 'block';
+            break;
+        case 'PLAYER_VS_AI':
+            aiEnabled.game1 = false;
+            aiEnabled.game2 = true;
+            document.getElementById('board2').style.display = 'block';
+            break;
+    }
+    
+    // Initialize games
+    initializeGames();
+}
+
+function initializeGames() {
+    // Reset both games
+    resetGame(game1);
+    resetGame(game2);
+    
+    // Draw initial birds
+    if (birdAnimFrames[0] && birdAnimFrames[0].complete) {
+        const initialFrame = birdAnimFrames[0];
+        game1.context.drawImage(initialFrame, game1.bird.x, game1.bird.y, game1.bird.width, game1.bird.height);
+        if (gameMode !== 'SINGLE') {
+            game2.context.drawImage(initialFrame, game2.bird.x, game2.bird.y, game2.bird.width, game2.bird.height);
+        }
+    }
+    
+    // Start pipe intervals
+    game1.pipeInterval = setInterval(() => placePipes(game1), currentPipeInterval);
+    if (gameMode !== 'SINGLE') {
+        game2.pipeInterval = setInterval(() => placePipes(game2), currentPipeInterval);
+    }
 }
 
 function calculateDifficulty(score) {
@@ -279,13 +366,62 @@ function drawBird(game) {
         currentFrame = birdAnimFrames[0] || birdImg;
     }
 
+    // Save the current context state
+    game.context.save();
+
+    // Add glow effect
+    game.context.shadowColor = '#FFD93D'; // Golden glow color
+    game.context.shadowBlur = 15; // Blur radius for the glow
+    game.context.shadowOffsetX = 0;
+    game.context.shadowOffsetY = 0;
+
+    // Draw the bird with glow
     game.context.drawImage(currentFrame, game.bird.x, game.bird.y, game.bird.width, game.bird.height);
+
+    // Restore the context state to avoid affecting other drawings
+    game.context.restore();
 }
 
 function update() {
     requestAnimationFrame(update);
-    updateGame(game1);
-    updateGame(game2);
+    
+    if (gameState === 'COUNTDOWN') {
+        updateCountdown();
+    } else if (gameState === 'PLAYING') {
+        updateGame(game1);
+        if (gameMode !== 'SINGLE') {
+            updateGame(game2);
+        }
+    }
+}
+
+function updateCountdown() {
+    countdownTimer++;
+    
+    // Update every 60 frames (1 second at 60fps)
+    if (countdownTimer % 60 === 0) {
+        countdownValue--;
+        
+        if (countdownValue > 0) {
+            document.getElementById('countdown-number').textContent = countdownValue;
+            // Trigger animation by removing and re-adding class
+            const numberEl = document.getElementById('countdown-number');
+            numberEl.style.animation = 'none';
+            setTimeout(() => {
+                numberEl.style.animation = 'countdownPulse 1s ease-in-out';
+            }, 10);
+            playSound(sfxWing);
+        } else {
+            // Start the game!
+            document.getElementById('countdown-number').textContent = 'GO!';
+            document.getElementById('countdown-text').textContent = 'FLY!';
+            playSound(sfxPoint);
+            
+            setTimeout(() => {
+                startGame(gameMode);
+            }, 500);
+        }
+    }
 }
 
 function updateGame(game) {
@@ -322,6 +458,13 @@ function updateGame(game) {
         game.context.save();
         game.context.translate(game.bird.x + game.bird.width / 2, game.bird.y + game.bird.height / 2);
         game.context.rotate(Math.PI / 4); //45 deg rotation
+
+        // Add glow effect for death animation too
+        game.context.shadowColor = '#FF6B6B'; // Red glow for death
+        game.context.shadowBlur = 20; // Slightly stronger glow for dramatic effect
+        game.context.shadowOffsetX = 0;
+        game.context.shadowOffsetY = 0;
+
         const deathFrame = birdAnimFrames[0] && birdAnimFrames[0].complete ? birdAnimFrames[0] : birdImg;
         game.context.drawImage(deathFrame, -game.bird.width / 2, -game.bird.height / 2, game.bird.width, game.bird.height);
         game.context.restore();
@@ -360,7 +503,7 @@ function updateGame(game) {
 
             // Trigger rianbald easter egg at score 5
             gameKey = game === game1 ? 'game1' : 'game2';
-            if ((Math.floor(game.score) === 41 || Math.floor(game.score) === 67 || Math.floor(game.score) % 100 === 0) && !rianbaldTrigger[gameKey]) {
+            if ((Math.floor(game.score) === 41 || Math.floor(game.score) === 67 || (Math.floor(game.score) % 100 === 0 && Math.floor(game.score) > 5)) && !rianbaldTrigger[gameKey]) {
                 rianbaldTrigger[gameKey] = true;
                 triggerRianbaldEasterEgg(game, pipe);
             }
@@ -444,8 +587,19 @@ function placePipes(game) {
     game.pipeArray.push(bottomPipe);
 }
 
+function handleInput(e) {
+    if (gameState === 'PLAYING') {
+        moveBird(e);
+    }
+    
+    // ESC key to return to menu
+    if (e.code === "Escape" && gameState === 'PLAYING') {
+        returnToMenu();
+    }
+}
+
 function moveBird(e) {
-    // Player 1 controls (left side) - W key for jump, R key for restart
+    // Player 1 controls (left side) - W key for jump
     if (e.code == "KeyW") {
         if (!game1.gameOver) {
             //jump
@@ -458,7 +612,7 @@ function moveBird(e) {
     }
 
     // Player 2 controls (right side) - I key for jump
-    if (e.code == "KeyI") {
+    if (e.code == "KeyI" && gameMode !== 'SINGLE') {
         if (!game2.gameOver) {
             //jump
             game2.velocityY = -6;
@@ -469,13 +623,43 @@ function moveBird(e) {
         }
     }
 
-    // R key restarts both games when both players are dead and ready
+    // R key restarts games when dead and ready
     if (e.code == "KeyR") {
-        if (game1.gameOver && game2.gameOver && game1.canRestart && game2.canRestart) {
-            resetGame(game1);
-            resetGame(game2);
+        if (gameMode === 'SINGLE') {
+            if (game1.gameOver && game1.canRestart) {
+                resetGame(game1);
+            }
+        } else {
+            if (game1.gameOver && game2.gameOver && game1.canRestart && game2.canRestart) {
+                resetGame(game1);
+                resetGame(game2);
+            }
         }
     }
+}
+
+function returnToMenu() {
+    gameState = 'TITLE';
+    
+    // Clear intervals
+    if (game1.pipeInterval) {
+        clearInterval(game1.pipeInterval);
+        game1.pipeInterval = null;
+    }
+    if (game2.pipeInterval) {
+        clearInterval(game2.pipeInterval);
+        game2.pipeInterval = null;
+    }
+    
+    // Show title screen and hide other screens
+    document.getElementById('title-screen').style.display = 'flex';
+    document.getElementById('countdown-screen').style.display = 'none';
+    document.getElementById('game-container').style.display = 'none';
+    document.getElementById('board2').style.display = 'block'; // Reset for menu
+    
+    // Reset games
+    resetGame(game1);
+    resetGame(game2);
 }
 
 function detectCollision(a, b) {
@@ -546,18 +730,33 @@ function drawGameOverScreen(game) {
 
     // Instructions
     const instructY = panelY + 150;
-    const bothDead = game1.gameOver && game2.gameOver;
-    const bothReady = game1.canRestart && game2.canRestart;
+    const instructY2 = panelY + 170;
+    
+    if (gameMode === 'SINGLE') {
+        if (game1.gameOver && game1.canRestart) {
+            game.context.fillStyle = "#4ECDC4";
+            game.context.font = "bold 16px 'Courier New', monospace";
+            game.context.fillText("Press R to restart", game.board.width / 2, instructY);
+        }
+    } else {
+        const bothDead = game1.gameOver && game2.gameOver;
+        const bothReady = game1.canRestart && game2.canRestart;
 
-    if (bothDead && bothReady) {
-        game.context.fillStyle = "#4ECDC4";
-        game.context.font = "bold 16px 'Courier New', monospace";
-        game.context.fillText("Press R to restart both", game.board.width / 2, instructY);
-    } else if (game.gameOver) {
-        game.context.fillStyle = "#FFA500";
-        game.context.font = "14px 'Courier New', monospace";
-        game.context.fillText("Waiting for other player...", game.board.width / 2, instructY);
+        if (bothDead && bothReady) {
+            game.context.fillStyle = "#4ECDC4";
+            game.context.font = "bold 16px 'Courier New', monospace";
+            game.context.fillText("Press R to restart both", game.board.width / 2, instructY);
+        } else if (game.gameOver) {
+            game.context.fillStyle = "#FFA500";
+            game.context.font = "14px 'Courier New', monospace";
+            game.context.fillText("Waiting for other player...", game.board.width / 2, instructY);
+        }
     }
+    
+    // ESC to menu instruction
+    game.context.fillStyle = "#888";
+    game.context.font = "12px 'Courier New', monospace";
+    game.context.fillText("Press ESC for menu", game.board.width / 2, instructY2);
 
     game.context.textAlign = "start";
 }

@@ -10,7 +10,55 @@
 </head>
 
 <body>
-    <div id="game-container">
+    <!-- Title Screen -->
+    <div id="title-screen">
+        <div id="title-content">
+            <h1 id="game-title">FAPPY GOON</h1>
+            <div id="subtitle">The Ultimate Flying Challenge</div>
+
+            <div id="menu-buttons">
+                <button class="menu-btn" id="single-player-btn" data-mode="SINGLE">
+                    SINGLE PLAYER
+                </button>
+                <button class="menu-btn" id="two-player-btn" data-mode="TWO_PLAYER">
+                    TWO PLAYER
+                </button>
+                <button class="menu-btn" id="ai-vs-ai-btn" data-mode="AI_VS_AI">
+                    AI vs AI
+                </button>
+                <button class="menu-btn" id="player-vs-ai-btn" data-mode="PLAYER_VS_AI">
+                    PLAYER vs AI
+                </button>
+            </div>
+
+            <div id="controls-info">
+                <div class="control-row">
+                    <span class="key">W</span> Player 1 Jump
+                </div>
+                <div class="control-row">
+                    <span class="key">I</span> Player 2 Jump
+                </div>
+                <div class="control-row">
+                    <span class="key">R</span> Restart Game
+                </div>
+                <div class="control-row">
+                    <span class="key">ESC</span> Return to Menu
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Countdown Screen -->
+    <div id="countdown-screen" style="display: none;">
+        <div id="countdown-content">
+            <h2 id="countdown-mode"></h2>
+            <div id="countdown-number">3</div>
+            <div id="countdown-text">GET READY!</div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-container" style="display: none;">
         <canvas id="board1"></canvas>
         <canvas id="board2"></canvas>
     </div>

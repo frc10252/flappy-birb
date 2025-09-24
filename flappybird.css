@@ -1,10 +1,199 @@
 body {
-    font-family:'Courier New', Courier, monospace;
+    font-family: 'Courier New', Courier, monospace;
     text-align: center;
     margin: 0;
     padding: 0;
     background-color: #87CEEB;
     overflow: hidden;
+}
+
+/* Title Screen Styles */
+#title-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    background: linear-gradient(45deg, #87CEEB, #4682B4, #87CEEB, #6BB6FF);
+    background-size: 400% 400%;
+    animation: gradientMove 8s ease infinite;
+    position: relative;
+    overflow: hidden;
+}
+
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+
+
+#title-content {
+    text-align: center;
+    z-index: 10;
+}
+
+#game-title {
+    font-size: 4rem;
+    font-weight: bold;
+    color: #FFD93D;
+    text-shadow: 3px 3px 0px #7f441a, 6px 6px 0px rgba(0, 0, 0, 0.3);
+    margin-bottom: 1rem;
+    letter-spacing: 0.1em;
+}
+
+#subtitle {
+    font-size: 1.2rem;
+    color: #7f441a;
+    font-weight: bold;
+    margin-bottom: 2rem;
+    text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.5);
+}
+
+#menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.menu-btn {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1.2rem;
+    font-weight: bold;
+    padding: 1rem 2rem;
+    border: none;
+    background: linear-gradient(145deg, #FFD93D, #FFA500);
+    color: #7f441a;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: all 0.2s ease;
+    min-width: 250px;
+
+    /* Pixel-style border effect */
+    box-shadow:
+        inset 2px 2px 0px rgba(255, 255, 255, 0.3),
+        inset -2px -2px 0px rgba(0, 0, 0, 0.3),
+        4px 4px 0px #7f441a,
+        6px 6px 0px rgba(0, 0, 0, 0.2);
+}
+
+.menu-btn:hover {
+    background: linear-gradient(145deg, #FFF44F, #FFB84D);
+    transform: translate(-1px, -1px);
+    box-shadow:
+        inset 2px 2px 0px rgba(255, 255, 255, 0.4),
+        inset -2px -2px 0px rgba(0, 0, 0, 0.2),
+        5px 5px 0px #7f441a,
+        7px 7px 0px rgba(0, 0, 0, 0.3);
+}
+
+.menu-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow:
+        inset 2px 2px 0px rgba(0, 0, 0, 0.2),
+        inset -2px -2px 0px rgba(255, 255, 255, 0.2),
+        2px 2px 0px #7f441a,
+        3px 3px 0px rgba(0, 0, 0, 0.2);
+}
+
+#controls-info {
+    color: #7f441a;
+    font-size: 0.9rem;
+    font-weight: bold;
+    text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.control-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.key {
+    background: linear-gradient(145deg, #f0f0f0, #d0d0d0);
+    color: #333;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.8rem;
+    box-shadow: 
+        inset 1px 1px 0px rgba(255, 255, 255, 0.5),
+        inset -1px -1px 0px rgba(0, 0, 0, 0.2),
+        2px 2px 0px rgba(0, 0, 0, 0.1);
+}
+
+/* Countdown Screen */
+#countdown-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.2) 0%, transparent 50%),
+        radial-gradient(circle at 70% 70%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
+        linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 25%, #45B7D1 50%, #96CEB4 75%, #FF6B6B 100%);
+    background-size: 100% 100%, 100% 100%, 200% 200%;
+    animation: countdownShift 3s ease infinite;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+@keyframes countdownShift {
+    0% { background-position: 0% 0%, 0% 0%, 0% 50%; }
+    50% { background-position: 100% 100%, 100% 100%, 100% 50%; }
+    100% { background-position: 0% 0%, 0% 0%, 0% 50%; }
+}
+
+#countdown-content {
+    text-align: center;
+    color: white;
+    text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
+}
+
+#countdown-mode {
+    font-size: 2rem;
+    margin-bottom: 2rem;
+    animation: modeSlide 0.5s ease-out;
+}
+
+@keyframes modeSlide {
+    0% { transform: translateY(-50px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+#countdown-number {
+    font-size: 8rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+    animation: countdownPulse 1s ease-in-out;
+}
+
+@keyframes countdownPulse {
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+#countdown-text {
+    font-size: 1.5rem;
+    font-weight: bold;
+    animation: textShake 0.5s ease-in-out infinite;
+}
+
+@keyframes textShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-2px); }
+    75% { transform: translateX(2px); }
 }
 
 #game-container {
@@ -17,7 +206,13 @@ body {
     transition: transform 0.3s ease;
 }
 
-#board1, #board2 {
+/* Single player mode - center the remaining canvas */
+#game-container:has(#board2[style*="display: none"]) {
+    justify-content: center;
+}
+
+#board1,
+#board2 {
     background-image: url("./flappybirdbg.png");
     border: 3px solid #7f441a;
     border-radius: 8px;
