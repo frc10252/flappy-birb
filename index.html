@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" , content="width=device-width, initial-scale=1.0">
+    <title>Flappy Lion</title>
+    <link rel="stylesheet" href="flappybird.css">
+    <script src="flappybird.js"></script>
+</head>
+
+<body>
+    <!-- Title Screen -->
+    <div id="title-screen">
+        <div id="title-content">
+            <h1 id="game-title">Flappy Lion</h1>
+            <div id="subtitle">The Ultimate Flying Challenge</div>
+
+            <div id="menu-buttons">
+                <button class="menu-btn" id="single-player-btn" data-mode="SINGLE">
+                    SINGLE PLAYER
+                </button>
+                <button class="menu-btn" id="two-player-btn" data-mode="TWO_PLAYER">
+                    TWO PLAYER
+                </button>
+                <button class="menu-btn" id="ai-vs-ai-btn" data-mode="AI_VS_AI">
+                    AI vs AI
+                </button>
+                <button class="menu-btn" id="player-vs-ai-btn" data-mode="PLAYER_VS_AI">
+                    PLAYER vs AI
+                </button>
+                <button class="menu-btn" id="leaderboard-btn">
+                    LEADERBOARD
+                </button>
+            </div>
+
+            <div id="controls-info">
+                <div class="control-row">
+                    <span class="key">D-PAD</span> Navigate Menu
+                </div>
+                <div class="control-row">
+                    <span class="key">A</span> Select Menu Option
+                </div>
+                <div class="control-row">
+                    <span class="key">B</span> Controller 1 Jump (Player 1)
+                </div>
+                <div class="control-row">
+                    <span class="key">B</span> Controller 2 Jump (Player 2)
+                </div>
+                <div class="control-row">
+                    <span class="key">Y</span> Restart Game
+                </div>
+                <div class="control-row">
+                    <span class="key">X</span> Return to Menu
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Countdown Screen -->
+    <div id="countdown-screen" style="display: none;">
+        <div id="countdown-content">
+            <h2 id="countdown-mode"></h2>
+            <div id="countdown-number">3</div>
+            <div id="countdown-text">GET READY!</div>
+        </div>
+    </div>
+
+    <!-- Leaderboard Screen -->
+    <div id="leaderboard-screen" style="display: none;">
+        <div id="leaderboard-content">
+            <h1 id="leaderboard-title">HIGH SCORES</h1>
+            <div id="leaderboard-list">
+                <div class="score-entry">
+                    <span class="mode-name">SINGLE PLAYER</span>
+                    <span class="score-value" id="score-single">0</span>
+                </div>
+                <div class="score-entry">
+                    <span class="mode-name">TWO PLAYER</span>
+                    <span class="score-value" id="score-two-player">0</span>
+                </div>
+                <div class="score-entry">
+                    <span class="mode-name">AI vs AI</span>
+                    <span class="score-value" id="score-ai-vs-ai">0</span>
+                </div>
+                <div class="score-entry">
+                    <span class="mode-name">PLAYER vs AI</span>
+                    <span class="score-value" id="score-player-vs-ai">0</span>
+                </div>
+            </div>
+            <button class="menu-btn" id="back-to-menu-btn">BACK TO MENU</button>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-container" style="display: none;">
+        <canvas id="board1"></canvas>
+        <canvas id="board2"></canvas>
+    </div>
+</body>
+
+</html>
