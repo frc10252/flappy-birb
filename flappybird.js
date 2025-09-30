@@ -71,6 +71,10 @@ let gamepadConnected = false;
 let gamepadIndex = -1;
 let gamepad2Connected = false;
 let gamepad2Index = -1;
+// Track last axis states per gamepad index to detect edge (not hold) for joysticks
+let lastAxisStates = {}; // { [index]: { y: 0 } }
+// Axis deadzone threshold for stick navigation
+const AXIS_DEADZONE = 0.45;
 
 // Controller navigation
 let currentMenuIndex = 0;
@@ -600,7 +604,7 @@ function update(currentTime = 0) {
         lastTime = currentTime;
         frameCount++;
         
-        if (gameState === 'TITLE') {
+        if (gameState === 'TITLE') { 
             updateControllerNavigation();
         } else if (gameState === 'COUNTDOWN') {
             updateCountdown();
@@ -857,24 +861,79 @@ function placePipes(game) {
 
 // Controller navigation functions
 function updateControllerNavigation() {
-    if (!gamepadConnected || gamepadIndex === -1) {
-        console.log("No controller connected for navigation");
-        return;
-    }
-    
+    // Choose a controller to use for menu navigation. Prefer primary controller
     const gamepads = navigator.getGamepads();
-    const gamepad = gamepads[gamepadIndex];
-    
-    if (!gamepad) {
-        console.log("Gamepad not found at index:", gamepadIndex);
+    let navIndex = -1;
+    if (gamepadIndex !== -1 && gamepads[gamepadIndex]) {
+        navIndex = gamepadIndex;
+    } else if (gamepad2Index !== -1 && gamepads[gamepad2Index]) {
+        navIndex = gamepad2Index;
+    } else {
+        // fallback: find first connected gamepad
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i]) { navIndex = i; break; }
+        }
+    }
+
+    if (navIndex === -1) {
+        // no connected controllers available
+        // console.log("No controller connected for navigation");
         return;
     }
-    
-    // Handle D-pad navigation
+
+    const gamepad = gamepads[navIndex];
+    if (!gamepad) return;
+
+    // Handle D-pad navigation (still supported)
     handleDpadNavigation(gamepad);
-    
+
+    // Handle left-stick (joystick) navigation for Xbox controllers
+    handleStickNavigation(gamepad, navIndex);
+
     // Handle button presses
     handleButtonPresses(gamepad);
+}
+
+// Map left stick Y to up/down navigation with deadzone and edge detection
+function handleStickNavigation(gamepad, index) {
+    // Most standard controllers expose left stick vertical on axes[1]
+    const yAxis = typeof gamepad.axes[1] === 'number' ? gamepad.axes[1] : 0;
+
+    // Initialize last state for this index if needed
+    if (!lastAxisStates[index]) lastAxisStates[index] = { y: 0 };
+
+    const lastY = lastAxisStates[index].y;
+
+    // Determine neutral vs up/down using deadzone
+    const up = yAxis < -AXIS_DEADZONE;
+    const down = yAxis > AXIS_DEADZONE;
+
+    const wasUp = lastY < -AXIS_DEADZONE;
+    const wasDown = lastY > AXIS_DEADZONE;
+
+    // Trigger on edge: when transitioning from neutral to up/down (not when holding)
+    if (up && !wasUp && !wasDown) {
+        if (gameState === 'TITLE') {
+            currentMenuIndex = Math.max(0, currentMenuIndex - 1);
+            updateMenuHighlight();
+        } else if (gameState === 'LEADERBOARD') {
+            currentLeaderboardIndex = Math.max(0, currentLeaderboardIndex - 1);
+            updateLeaderboardHighlight();
+        }
+        playSound(sfxWing);
+    } else if (down && !wasDown && !wasUp) {
+        if (gameState === 'TITLE') {
+            currentMenuIndex = Math.min(menuButtons.length - 1, currentMenuIndex + 1);
+            updateMenuHighlight();
+        } else if (gameState === 'LEADERBOARD') {
+            currentLeaderboardIndex = Math.min(leaderboardButtons.length - 1, currentLeaderboardIndex + 1);
+            updateLeaderboardHighlight();
+        }
+        playSound(sfxWing);
+    }
+
+    // Save last axis value for edge detection
+    lastAxisStates[index].y = yAxis;
 }
 
 function handleDpadNavigation(gamepad) {
